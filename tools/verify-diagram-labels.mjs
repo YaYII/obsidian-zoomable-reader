@@ -190,6 +190,12 @@ try {
   assert(parseFloat(beforeFont) < 16, "主题的图表文字样式确实生效（字号 < 16px 默认值）",
     "fontSize=" + beforeFont + "，主题=" + (themePath ? path.basename(themePath) : "(未找到，未加载)"));
 
+  /* 抓一张「笔记里的图」，用于最后的对比图（用户就是拿这两张截图来报障的）。 */
+  const shotDir = path.join(ROOT, "tests", "browser", "out");
+  const noteShot = path.join(shotDir, "label-note.png");
+  /* 元素截图而不是整页截图：整页里图只占一小块，拼出来的对比图全是空白。 */
+  await page.locator("#host").screenshot({ path: noteShot });
+
   await page.evaluate(() => {
     const svg = document.querySelector("#host svg");
     window.labelLightbox.openNode(svg, { title: "Mermaid diagram" });
@@ -197,6 +203,15 @@ try {
   await page.waitForTimeout(200);
   const moved = await page.evaluate(() => !!document.querySelector(".zr-lightbox-node svg"));
   assert(moved, "图表已搬进查看器（走真实搬移路径）", "moved=" + moved);
+
+  const viewerShot = path.join(shotDir, "label-viewer.png");
+  /* 查看器里图是 100%（用户可以自己放大），可能比窗口宽 —— 为了截全，临时把窗口放宽，
+   * 截完立刻改回来，免得影响后面「用户坐标系」的比对。 */
+  await page.setViewportSize({ width: 2000, height: 900 });
+  await page.waitForTimeout(120);
+  await page.locator(".zr-lightbox-node").screenshot({ path: viewerShot });
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await page.waitForTimeout(120);
 
   /* 量之前把查看器的缩放归零：查看器打开时会「适配窗口」（scale≈0.94），
    * 那会让 getBoundingClientRect() 整体缩一圈，看起来像标签走形 —— 其实是假的。
@@ -257,6 +272,25 @@ try {
    * 比例不同是功能而不是缺陷。这里只守「布局不许变」——布局变了的表征就是
    * 标签在用户坐标系里的尺寸变了（上面那条断言）。 */
   assert(errors.length === 0, "验证台无脚本错误", errors.slice(0, 2).join(" | ") || "无");
+
+  /* 对比图：用户是拿「笔记里」与「放大后」两张截图来报障的，所以交付物也给两张并排，
+   * 一眼能看出「放大只是变大，不是变成另一个样子」。
+   * 拼图交给浏览器自己（不引入图像库）：data URI 内联，setContent 就能渲染。 */
+  const b64 = (file) => fs.readFileSync(file).toString("base64");
+  const composeHtml =
+    "<body style='margin:0;background:#111;font-family:sans-serif'>" +
+    "<div style='display:flex;gap:2px'>" +
+    "<figure style='margin:0;flex:1;border:1px solid #444'><img style='width:100%;display:block' src='data:image/png;base64," + b64(noteShot) + "'>" +
+    "<figcaption style='color:#ddd;padding:6px 10px;font-size:14px'>笔记里（版心内按比例显示）</figcaption></figure>" +
+    "<figure style='margin:0;flex:1;border:1px solid #444'><img style='width:100%;display:block' src='data:image/png;base64," + b64(viewerShot) + "'>" +
+    "<figcaption style='color:#ddd;padding:6px 10px;font-size:14px'>放大后（查看器）</figcaption></figure>" +
+    "</div></body>";
+  const composePage = await browser.newPage({ viewport: { width: 1600, height: 170 } });
+  await composePage.setContent(composeHtml);
+  const comparePath = path.join(ROOT, "docs", "images", "screenshot-label-compare.png");
+  await composePage.screenshot({ path: comparePath, fullPage: true });
+  await composePage.close();
+  console.log("对比图：" + path.relative(ROOT, comparePath));
 } finally {
   await browser.close();
 }

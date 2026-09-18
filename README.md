@@ -85,6 +85,8 @@ usual meaning; on touch devices, where there is no hover, a tap opens the viewer
   node keeps its `.mermaid` ancestry, so the theme's text styles still apply, and its size is
   pinned to the size it had in the note — no silent rescale, so labels do not reflow.
 
+![The same diagram in the note and in the viewer: same layout, only bigger](docs/images/screenshot-label-compare.png)
+
 ## Installation
 
 **From the community directory** (after this plugin is published): Settings → Community plugins →
