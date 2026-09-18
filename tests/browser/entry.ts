@@ -2,6 +2,7 @@
  * 白板模式现在是「一整张 1280px 宽的版面」，所以这里只需要手势层 + 出厂默认值。 */
 import { ZoomPanLayer, formatPercent, fitRect, BOARD_MIN_SCALE } from "../../src/zoom-pan";
 import { ImageLightbox, installZoomAffordance } from "../../src/lightbox";
+import { installMobileImageGestures } from "../../src/mobile-image-gestures";
 import { DEFAULT_DIAGRAM_LAYOUT, applyDiagramLayout, mergeDiagramConfig } from "../../src/diagram-layout";
 import { DEFAULT_SETTINGS, PAPER_WIDTHS_PX, WEB_WIDTH_PX, paperNameFor, readingLineWidth, widthLabel, widthToMm } from "../../src/settings-spec";
 import {
@@ -20,6 +21,7 @@ declare global {
     ZoomPanFormat: { percent: typeof formatPercent; fitRect: typeof fitRect; boardMinScale: number };
     ImageLightbox: typeof ImageLightbox;
     installZoomAffordance: typeof installZoomAffordance;
+    installMobileImageGestures: typeof installMobileImageGestures;
     DiagramLayout: {
       apply: typeof applyDiagramLayout;
       merge: typeof mergeDiagramConfig;
@@ -50,6 +52,7 @@ window.ZoomPanLayer = ZoomPanLayer;
 window.ZoomPanFormat = { percent: formatPercent, fitRect: fitRect, boardMinScale: BOARD_MIN_SCALE };
 window.ImageLightbox = ImageLightbox;
 window.installZoomAffordance = installZoomAffordance;
+window.installMobileImageGestures = installMobileImageGestures;
 window.DiagramLayout = { apply: applyDiagramLayout, merge: mergeDiagramConfig, defaults: DEFAULT_DIAGRAM_LAYOUT };
 window.ZoomableReaderDefaults = DEFAULT_SETTINGS;
 window.ReadingView = {

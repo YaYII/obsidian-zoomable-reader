@@ -1,7 +1,8 @@
-import { Menu, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { Menu, Notice, Platform, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./src/defaults";
 import { DEFAULT_DIAGRAM_LAYOUT, DiagramLayout, MermaidGlobal, applyDiagramLayout } from "./src/diagram-layout";
-import { ImageLightbox, installZoomAffordance } from "./src/lightbox";
+import { ImageLightbox, installZoomAffordance, type LightboxTarget } from "./src/lightbox";
+import { installMobileImageGestures } from "./src/mobile-image-gestures";
 import {
   READING_ZOOM_STEP,
   clampReadingZoom,
@@ -33,6 +34,7 @@ export default class ZoomableReaderPlugin extends Plugin {
   private detachAffordance: (() => void) | null = null;
   private readingStyle: { update: (next: ReadingViewOptions) => void; destroy: () => void } | null = null;
   private detachReadingGestures: (() => void) | null = null;
+  private detachMobileImageGestures: (() => void) | null = null;
 
   async onload(): Promise<void> {
     await this.loadPersisted();
@@ -155,6 +157,7 @@ export default class ZoomableReaderPlugin extends Plugin {
       lineWidth: readingLineWidth(this.settings.readingWidth),
       zoom: this.settings.readingZoom / 100,
       gestures: this.settings.readingGestures,
+      imageWidth: this.settings.readingImageWidth,
     };
   }
 
@@ -197,6 +200,22 @@ export default class ZoomableReaderPlugin extends Plugin {
       this.detachAffordance = null;
     }
     const doc = this.app.workspace.containerEl.ownerDocument;
+
+    /* 手机：阅读视图里双击图片/图表 = 放大查看，同时吃掉 Obsidian 的「双击进入编辑」。
+     * 之所以要重装：开关变了、或图片/图表开关变了，都得跟着变。 */
+    if (this.detachMobileImageGestures) {
+      this.detachMobileImageGestures();
+      this.detachMobileImageGestures = null;
+    }
+    const detachMobile = installMobileImageGestures(doc, {
+      mobile: this.settings.mobileImageGestures && Platform.isMobile,
+      images: this.settings.imageViewer,
+      diagrams: this.settings.diagramViewer,
+      onOpen: (found: LightboxTarget) => this.openTarget(found),
+    });
+    this.detachMobileImageGestures = detachMobile;
+    this.register(detachMobile);
+
     const detach = installZoomAffordance(doc, {
       images: this.settings.imageViewer,
       diagrams: this.settings.diagramViewer,
@@ -204,14 +223,17 @@ export default class ZoomableReaderPlugin extends Plugin {
       persistent: this.settings.persistentZoomButton,
       corner: this.settings.zoomButtonCorner,
       label: "Zoom in / 放大",
-      onTarget: (found) => {
-        const lightbox = this.openLightbox();
-        if (found.kind === "image") lightbox.openImage(found.element as HTMLImageElement);
-        else lightbox.openNode(found.element, { title: "Mermaid diagram" });
-      },
+      onTarget: (found) => this.openTarget(found),
     });
     this.detachAffordance = detach;
     this.register(detach);
+  }
+
+  /** 打开查看器（按钮、点击、手机双击三条入口共用一份）。 */
+  private openTarget(found: LightboxTarget): void {
+    const lightbox = this.openLightbox();
+    if (found.kind === "image") lightbox.openImage(found.element as HTMLImageElement);
+    else lightbox.openNode(found.element, { title: "Mermaid diagram" });
   }
 
   /**
@@ -335,14 +357,17 @@ export default class ZoomableReaderPlugin extends Plugin {
    *   ③ 其余：交给视图自己判断（手势参数只重建手势层，白板排版才重排内容）。
    */
   applySettingChange(key: keyof ZoomableReaderSettings): void {
-    if (key === "readingWidth" || key === "readingZoom" || key === "readingGestures") this.syncReadingView();
+    if (key === "readingWidth" || key === "readingZoom" || key === "readingGestures" || key === "readingImageWidth") {
+      this.syncReadingView();
+    }
     if (key === "diagramLayout" || key === "diagramWrapWidth") this.applyDiagramLayoutNow();
     if (
       key === "zoomButtonCorner" ||
       key === "persistentZoomButton" ||
       key === "imageViewer" ||
       key === "diagramViewer" ||
-      key === "clickToOpenViewer"
+      key === "clickToOpenViewer" ||
+      key === "mobileImageGestures"
     ) {
       this.registerLightbox();
     }

@@ -16,6 +16,9 @@ export type ReaderMode = "page" | "board";
 /** 阅读视图（Obsidian 自带的那个）的版心宽度：跟随主题，或固定一个像素值。 */
 export type ReadingWidth = "theme" | "760" | "800" | "900" | "1000" | "1100" | "1200";
 
+/** 阅读视图里的图片宽度策略（与 reading-view.ts 的 ReadingImageWidth 保持一致）。 */
+export type ReadingImageWidth = "fill" | "contain" | "natural";
+
 /** 把设置里的宽度取值换算成样式层要的数字（"theme" → 跟随主题）。 */
 export function readingLineWidth(value: ReadingWidth): number | "theme" {
   if (value === "theme") return "theme";
@@ -42,6 +45,10 @@ export interface ZoomableReaderSettings {
   readingZoom: number;
   /** 阅读视图手势缩放：手机双指捏合 / 桌面 Ctrl+滚轮 */
   readingGestures: boolean;
+  /** 阅读视图里的图片怎么占宽度：撑满版心（等比）/ 不超过版心 / 原始尺寸 */
+  readingImageWidth: ReadingImageWidth;
+  /** 手机：双击图片 = 放大查看（并阻止 Obsidian 的「双击进入编辑」） */
+  mobileImageGestures: boolean;
 
   /* --- 打开方式与版面 / Opening & page --- */
   /** 打开笔记时默认用哪种模式：版面（跟随主题行宽）或白板（一整张 1280px 宽版面） */
@@ -123,6 +130,9 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   readingWidth: "900",
   readingZoom: 100,
   readingGestures: true,
+  /* 图片撑满版心：用户要「严格按照插件约束的宽度显示内容，等比放大」。 */
+  readingImageWidth: "fill",
+  mobileImageGestures: true,
   defaultMode: "page",
   showToolbar: true,
   padding: 16,
@@ -164,7 +174,7 @@ export interface SettingSpecBase {
 
 export interface SettingToggleSpec extends SettingSpecBase {
   control: "toggle";
-  key: "readingGestures" | "pinchZoom" | "showToolbar" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
+  key: "readingGestures" | "mobileImageGestures" | "pinchZoom" | "showToolbar" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
 }
 
 export interface SettingSliderSpec extends SettingSpecBase {
@@ -179,7 +189,7 @@ export interface SettingSliderSpec extends SettingSpecBase {
 
 export interface SettingDropdownSpec extends SettingSpecBase {
   control: "dropdown";
-  key: "readingWidth" | "defaultMode" | "zoomButtonCorner";
+  key: "readingWidth" | "readingImageWidth" | "defaultMode" | "zoomButtonCorner";
   options: Record<string, string>;
 }
 
@@ -324,6 +334,21 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
         aliases: ["阅读视图", "缩放", "放大", "缩小", "字号", "reading", "zoom", "scale", "font"],
       },
       {
+        control: "dropdown",
+        id: "reading-image-width",
+        key: "readingImageWidth",
+        options: {
+          fill: "撑满版心（等比放大）/ Fill the line width",
+          contain: "不超过版心 / Fit within the line width",
+          natural: "原始尺寸 / Natural size",
+        },
+        zh: "阅读视图图片宽度",
+        en: "Reading view image width",
+        zhDesc: "默认「撑满版心」：图片按版心宽度等比放大，高度自动，不裁剪也不拉伸 —— 即使图片写了 ![[x.png|300]] 也统一到版心宽度。「不超过版心」只保证不溢出，「原始尺寸」完全交给主题。",
+        enDesc: "Fill (default) scales every image to the line width, keeping the aspect ratio — no cropping, no stretching, and explicit widths like ![[x.png|300]] are normalised too. Fit only prevents overflow; Natural leaves everything to the theme.",
+        aliases: ["图片", "宽度", "等比", "放大", "撑满", "版心", "image", "width", "scale", "stretch", "fill"],
+      },
+      {
         control: "toggle",
         id: "reading-gestures",
         key: "readingGestures",
@@ -424,6 +449,16 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
         zhDesc: "开：每张图片、每个图表都带一个小按钮，不用去找。关：只有指针悬停在图上时才出现。",
         enDesc: "On: every image and diagram carries a small button, so you never hunt for it. Off: the button only appears while the pointer is over it.",
         aliases: ["按钮", "常驻", "悬停", "button", "always", "hover"],
+      },
+      {
+        control: "toggle",
+        id: "mobile-image-gestures",
+        key: "mobileImageGestures",
+        zh: "手机：双击图片 = 放大查看",
+        en: "Mobile: double-tap an image to zoom it",
+        zhDesc: "手机上在阅读视图里双击图片会打开可缩放的查看器；同时阻止 Obsidian 的「双击进入编辑」——阅读模式要进编辑，请用菜单里的按钮。只在手机生效，桌面不受影响。",
+        enDesc: "On mobile, double-tapping an image inside the reading view opens the zoomable viewer, and Obsidian's double-tap-to-edit is suppressed (use the menu button to edit instead). Mobile only; the desktop behaviour is untouched.",
+        aliases: ["双击", "图片", "放大", "编辑", "手机", "double", "tap", "image", "zoom", "edit", "mobile"],
       },
       {
         control: "toggle",

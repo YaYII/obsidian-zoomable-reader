@@ -18,6 +18,8 @@
   .markdown-preview-sizer { margin: 0 auto; max-width: var(--file-line-width); }
   .markdown-preview-sizer p { font-size: 16px; line-height: 1.7; margin: 0 0 12px; }
   #outside { position: fixed; right: 0; bottom: 0; width: 120px; height: 80px; background: #dfe6ee; }
+  #editArea { position: fixed; right: 0; top: 0; width: 160px; height: 90px; background: #f0f0ff; }
+  #editArea img { width: 80px; }
 </style>
 </head>
 <body>
@@ -26,13 +28,17 @@
     <div class="markdown-preview-sizer" id="sizer"></div>
   </div>
 </div>
+<div id="editArea" class="markdown-source-view"><img id="editImg" alt="编辑模式里的图" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22200%22%3E%3Crect%20width%3D%22600%22%20height%3D%22200%22%20fill%3D%22%23cfe%22%2F%3E%3C%2Fsvg%3E"></div>
 <div id="outside"></div>
 <script src="out/zoom-pan.js"></script>
 <script>
 /* 造一篇够长的正文：缩放会重排，段落多才看得出「字变大、版心不变」 */
 (function () {
   var sizer = document.getElementById("sizer");
-  var html = "<h1>阅读视图宽度与缩放</h1>";
+  var html = "<h1>阅读视图宽度与缩放</h1>" +
+    '<img id="photo" alt="验证图 3:1" src="data:image/svg+xml;utf8,' +
+    encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="600" height="200" fill="#dfe6ee"/><text x="20" y="110" font-size="40" fill="#556">600x200</text></svg>') +
+    '">';
   for (var i = 1; i <= 24; i += 1) {
     html += "<p>第 " + i + " 段：阅读视图能不能改宽度、能不能缩放，读代码看不出来 —— " +
       "要看真实排版：版心宽度、字号渲染大小、以及滚动高度。</p>";
@@ -43,6 +49,48 @@
 var styleHandle = null;
 var detachGestures = null;
 var zoomEvents = [];
+
+/* 模拟 Obsidian 在阅读视图里对图片的双击行为（进入编辑）。
+ * 它在【冒泡阶段】监听：只要我们真的把双击吃掉了，它一次都不该被调用。 */
+var editCount = 0;
+var simLastTapAt = 0;
+var simLastPoint = { x: 0, y: 0 };
+/* 模拟 Obsidian 的「双击进入编辑」：只在双击时触发（单次 tap 不是编辑），
+ * 而且它自己也是一段【冒泡阶段】的逻辑 —— 我们真把事件吃掉时，它一次都不该被调用。 */
+document.addEventListener("dblclick", function (event) {
+  if (event.target instanceof Element && event.target.closest("#photo")) editCount += 1;
+}, false);
+document.addEventListener("touchend", function (event) {
+  if (!(event.target instanceof Element) || !event.target.closest("#photo")) return;
+  var t = event.changedTouches[0];
+  if (!t) return;
+  var now = Date.now();
+  var moved = Math.hypot(t.clientX - simLastPoint.x, t.clientY - simLastPoint.y);
+  var isDouble = now - simLastTapAt <= 320 && moved <= 32;
+  if (!isDouble) { simLastTapAt = now; simLastPoint = { x: t.clientX, y: t.clientY }; return; }
+  simLastTapAt = 0;
+  editCount += 1;
+}, false);
+
+/* 手机图片手势：记录命中与打开 */
+var gestureLog = [];
+var openLog = [];
+var detachMobile = null;
+function installMobileGestures(options) {
+  if (detachMobile) { detachMobile(); detachMobile = null; }
+  gestureLog = [];
+  openLog = [];
+  editCount = 0;
+  detachMobile = window.installMobileImageGestures(document, Object.assign({
+    mobile: true,
+    images: true,
+    diagrams: true,
+    onHit: function (target, gesture) { gestureLog.push({ kind: target.kind, gesture: gesture }); },
+    onOpen: function (target) { openLog.push(target.kind); },
+  }, options || {}));
+  return function () { if (detachMobile) { detachMobile(); detachMobile = null; } };
+}
+function detachMobileGestures() { if (detachMobile) { detachMobile(); detachMobile = null; } }
 
 function installStyle(options) {
   if (styleHandle) styleHandle.destroy();
@@ -63,19 +111,33 @@ function installGestures(options) {
 
 var currentZoom = 1;
 function applyZoomStyle(z) {
-  installStyle({ lineWidth: window.harness.lineWidth(), zoom: z, gestures: true });
+  installStyle({ lineWidth: window.harness.lineWidth(), zoom: z, gestures: true, imageWidth: window.harness.imageWidth });
 }
 
 window.harness = {
   lineWidth: function () { return window.__lineWidth === undefined ? 900 : window.__lineWidth; },
   setLineWidth: function (w) { window.__lineWidth = w; installStyle({ lineWidth: w, zoom: currentZoom, gestures: true }); },
+  imageWidth: "fill",
   setOptions: function (options) {
     if (options.lineWidth !== undefined) window.__lineWidth = options.lineWidth;
     if (options.zoom !== undefined) currentZoom = options.zoom;
-    installStyle({ lineWidth: window.harness.lineWidth(), zoom: currentZoom, gestures: true });
+    if (options.imageWidth !== undefined) window.harness.imageWidth = options.imageWidth;
+    installStyle({ lineWidth: window.harness.lineWidth(), zoom: currentZoom, gestures: true, imageWidth: window.harness.imageWidth });
     return window.harness.state();
   },
   installGestures: installGestures,
+  installMobileGestures: installMobileGestures,
+  detachMobileGestures: detachMobileGestures,
+  gestureLog: function () { return gestureLog.slice(); },
+  clearGestureLogForTest: function () { gestureLog = []; openLog = []; },
+  openLog: function () { return openLog.slice(); },
+  editCount: function () { return editCount; },
+  imageBox: function (id) {
+    var el = document.getElementById(id);
+    if (!el) return null;
+    var r = el.getBoundingClientRect();
+    return { width: r.width, height: r.height, left: r.left, top: r.top };
+  },
   detachGestures: function () { if (detachGestures) { detachGestures(); detachGestures = null; } },
   zoom: function () { return currentZoom; },
   zoomEvents: function () { return zoomEvents.slice(); },

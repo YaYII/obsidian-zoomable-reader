@@ -27,7 +27,7 @@ export default [
     /* 查看器 / 手势层刻意不依赖 obsidian 运行时（连 DOM 助手也不用），
      * 这样同一份代码能在真实 Chromium 里用真事件验证（tests/browser/*.html）。
      * 代价是一批「用 win.createEl/createDiv」的风格建议，故本地关掉。 */
-    files: ["src/lightbox.ts", "src/reading-view.ts"],
+    files: ["src/lightbox.ts", "src/reading-view.ts", "src/mobile-image-gestures.ts"],
     rules: {
       "obsidianmd/prefer-create-el": "off",
     },

@@ -155,6 +155,35 @@ try {
   await page.waitForTimeout(140);
   assert((await page.evaluate(() => window.harness.zoomEvents().length)) === 0, "卸载手势后：Ctrl+滚轮不再被接管", "事件 0 次");
 
+  /* ⑦ 图片宽度：严格按版心宽度等比放大 */
+  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" }));
+  await page.waitForTimeout(60);
+  const fillBox = await page.evaluate(() => window.harness.imageBox("photo"));
+  const ratio = fillBox.width / fillBox.height;
+  assert(near(fillBox.width, 900, 2), "fill：图片按版心宽度等比撑满（600px 的图放大到 900px）", fmt(fillBox.width) + "px");
+  assert(near(ratio, 3, 0.05), "fill：等比放大，不变形（宽高比仍是 3:1）", "比例 " + fmt(ratio));
+
+  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "contain" }));
+  await page.waitForTimeout(60);
+  const containBox = await page.evaluate(() => window.harness.imageBox("photo"));
+  assert(near(containBox.width, 600, 2), "contain：不放大（600px 的图仍是 600px）", fmt(containBox.width) + "px");
+
+  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "natural" }));
+  await page.waitForTimeout(60);
+  const naturalState = await page.evaluate(() => ({ box: window.harness.imageBox("photo"), css: window.harness.state().styleText }));
+  assert(!naturalState.css.includes("img") && near(naturalState.box.width, 600, 2), "natural：不注入图片规则，完全交给主题", fmt(naturalState.box.width) + "px · 含 img 规则=" + naturalState.css.includes("img"));
+
+  /* ⑧ 手机版才管的双击：桌面（mobile:false）不插手，双击图片照旧是「编辑」 */
+  await page.evaluate(() => {
+    window.harness.installMobileGestures({ mobile: false });
+    window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" });
+  });
+  const photoBox = await page.evaluate(() => window.harness.imageBox("photo"));
+  await page.mouse.dblclick(rect.left + photoBox.left + photoBox.width / 2, rect.top + photoBox.top + photoBox.height / 2);
+  await page.waitForTimeout(80);
+  const desktopGesture = await page.evaluate(() => ({ hits: window.harness.gestureLog().length, edits: window.harness.editCount() }));
+  assert(desktopGesture.hits === 0, "桌面（mobile:false）：双击图片不打开查看器（不抢桌面行为）", "命中 " + desktopGesture.hits + " 次");
+
   assert(pageErrors.length === 0, "桌面验证台无脚本错误", pageErrors.slice(0, 2).join(" | ") || "无");
   await desktop.close();
 
@@ -185,6 +214,10 @@ try {
         id: p.id === undefined ? i + 1 : p.id,
       })),
     });
+  const tap = async (x, y) => {
+    await touch("touchStart", [{ x: x, y: y }]);
+    await touch("touchEnd", []);
+  };
   const mrect = await mpage.evaluate(() => window.harness.rect());
 
   await mpage.evaluate(() => {
@@ -219,6 +252,54 @@ try {
   await touch("touchEnd", []);
   await mpage.waitForTimeout(200);
   assert((await mpage.evaluate(() => window.harness.zoomEvents().length)) === 0, "阅读视图之外的双指捏合不生效（不抢别处的手势）", "事件 0 次");
+
+  /* ⑨ 手机：双击图片 = 放大查看，并且【禁止双击进入编辑】 */
+  await mpage.evaluate(() => {
+    window.harness.installMobileGestures({ mobile: true });
+    window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" });
+  });
+  const mPhoto = await mpage.evaluate(() => window.harness.imageBox("photo"));
+  const photoCenter = {
+    x: mrect.left + mPhoto.left + mPhoto.width / 2,
+    y: mrect.top + mPhoto.top + Math.min(mPhoto.height / 2, 200),
+  };
+
+  // 单次 tap：不该打开（这是「双击」才有的入口）
+  await tap(photoCenter.x, photoCenter.y);
+  await mpage.waitForTimeout(360);
+  const singleTap = await mpage.evaluate(() => ({ hits: window.harness.gestureLog().length, opens: window.harness.openLog().length }));
+  assert(singleTap.hits === 0 && singleTap.opens === 0, "手机单击图片不触发（这是双击才有的入口）", "命中 " + singleTap.hits + " 次");
+
+  // 双击：打开查看器 + 吃掉事件（模拟的 Obsidian 编辑处理器一次都不该被调用）
+  await tap(photoCenter.x, photoCenter.y);
+  await mpage.waitForTimeout(60);
+  await tap(photoCenter.x, photoCenter.y);
+  await mpage.waitForTimeout(200);
+  const doubleTap = await mpage.evaluate(() => ({
+    hits: window.harness.gestureLog(),
+    opens: window.harness.openLog(),
+    edits: window.harness.editCount(),
+  }));
+  assert(
+    doubleTap.opens.length === 1 && doubleTap.hits[0] && doubleTap.hits[0].kind === "image",
+    "手机双击图片 → 打开可缩放的查看器",
+    "打开 " + doubleTap.opens.length + " 次 · 命中手势 " + (doubleTap.hits[0] ? doubleTap.hits[0].gesture : "无")
+  );
+  assert(doubleTap.edits === 0, "手机双击图片【不会】进入编辑模式（事件被吃掉，模拟的编辑处理器 0 次）", "编辑触发 " + doubleTap.edits + " 次");
+
+  // 阅读视图【之外】的图片（模拟编辑区）：不接管
+  await mpage.evaluate(() => window.harness.clearGestureLogForTest && window.harness.clearGestureLogForTest());
+  const mEdit = await mpage.evaluate(() => window.harness.imageBox("editImg"));
+  await tap(mrect.left + mEdit.left + mEdit.width / 2, mrect.top + mEdit.top + mEdit.height / 2);
+  await mpage.waitForTimeout(60);
+  await tap(mrect.left + mEdit.left + mEdit.width / 2, mrect.top + mEdit.top + mEdit.height / 2);
+  await mpage.waitForTimeout(200);
+  const outsideLog = await mpage.evaluate(() => ({ opens: window.harness.openLog().length, hits: window.harness.gestureLog().length }));
+  assert(
+    outsideLog.opens === 0 && outsideLog.hits === 0,
+    "阅读视图之外的图片不接管（模拟的编辑区里双击照旧，不进我们的查看器）",
+    "打开 " + outsideLog.opens + " 次 · 命中 " + outsideLog.hits + " 次"
+  );
 
   assert(mErrors.length === 0, "手机验证台无脚本错误", mErrors.slice(0, 2).join(" | ") || "无");
   assert(mrect.width > 0, "手机视口宽度有效（触摸坐标以视口为基准）", mrect.width + "px");

@@ -26,6 +26,9 @@ export const READING_ZOOM_STEP = 0.05;
 export const STYLE_ELEMENT_ID = "zr-reading-style";
 export const READING_VIEW_SELECTOR = ".markdown-reading-view";
 
+/** 阅读视图里图片怎么占宽度：撑满版心（等比放大）/ 不超过版心 / 原始尺寸 */
+export type ReadingImageWidth = "fill" | "contain" | "natural";
+
 export interface ReadingViewOptions {
   /** 版心宽度（px），"theme" = 跟随主题（不注入任何宽度规则） */
   lineWidth: number | "theme";
@@ -33,6 +36,8 @@ export interface ReadingViewOptions {
   zoom: number;
   /** 是否启用手势缩放（手机双指捏合 / 桌面 Ctrl+滚轮） */
   gestures: boolean;
+  /** 图片宽度策略（默认撑满版心：等比放大，不裁剪、不拉伸） */
+  imageWidth: ReadingImageWidth;
 }
 
 export function clampReadingZoom(zoom: number): number {
@@ -65,6 +70,30 @@ export function readingCss(options: ReadingViewOptions): string {
 
   if (zoom !== 1) {
     rules.push(READING_VIEW_SELECTOR + " { zoom: " + zoom + "; }");
+  }
+
+  /* 图片：默认【撑满版心】——按版心宽度等比放大，高度自动，绝不拉伸变形。
+   * 显式写了宽度的图片（![[x.png|300]]）也被统一到版心宽度：用户要的是
+   * 「严格按照插件约束的宽度显示」，不是每张图各说各话。
+   * 只作用于阅读视图，编辑模式与其它视图不受影响。 */
+  if (options.imageWidth === "fill") {
+    rules.push(
+      READING_VIEW_SELECTOR + " .markdown-preview-view img,\n" +
+        READING_VIEW_SELECTOR + " .markdown-preview-view video {\n" +
+        "  width: 100% !important;\n" +
+        "  max-width: 100% !important;\n" +
+        "  height: auto !important;\n" +
+        "  object-fit: contain;\n" +
+        "}"
+    );
+  } else if (options.imageWidth === "contain") {
+    rules.push(
+      READING_VIEW_SELECTOR + " .markdown-preview-view img,\n" +
+        READING_VIEW_SELECTOR + " .markdown-preview-view video {\n" +
+        "  max-width: 100% !important;\n" +
+        "  height: auto !important;\n" +
+        "}"
+    );
   }
 
   if (options.gestures) {

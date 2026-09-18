@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.3.7
+
+- **Images follow the line width, scaled by ratio.** In the reading view every image is now scaled to
+  exactly the line width you chose (900 px by default) with \`height: auto\`, so nothing is cropped
+  or stretched and a 600 × 200 screenshot becomes 900 × 300. Explicit widths (\`![[image.png|300]]\`)
+  are normalised too — one page, one image width, as asked. Two other policies stay available
+  (*fit within the line width*, *natural size*), and the rules only ever touch
+  \`.markdown-reading-view\`, never the editor.
+- **Mobile: double-tapping an image zooms it instead of entering editing.** In Obsidian's reading
+  view a double tap on an image means "edit", which is exactly wrong while reading on a phone. The
+  plugin now intercepts that gesture inside the reading view and opens the zoomable viewer instead;
+  the edit path is suppressed (use the menu button when you really want to edit). A single tap does
+  nothing new, gestures outside the reading view are ignored, and **desktop is untouched** — as
+  asked, this is a mobile behaviour.
+- **Two ordering bugs found by the browser harness, both fixed rather than papered over.** A touch
+  double tap also produces a synthetic \`dblclick\`, and which one arrives first is not stable — the
+  first version opened the viewer twice. Both paths now share a short mutual-exclusion window: one
+  double tap opens the viewer exactly once. The harness also had to be honest: its simulated
+  "Obsidian edit" listener originally counted every tap, which proved nothing; it now does real
+  double-tap detection, so "0 edits" means the double tap was genuinely consumed.
+
+Verification: `npm run verify:reading` is now **26 assertions** — the image policies are measured
+in the DOM (fill: 600 px image → 900 px, ratio still 3:1; contain: stays 600 px; natural: no rules
+injected), the desktop path is asserted *not* to open the viewer, and on a phone viewport a real CDP
+double tap opens the viewer exactly once while the simulated edit handler records **zero** events.
+
 ## 1.3.6
 
 - **The reading view itself now has a width and a zoom.** Obsidian's own reading view is not taken
