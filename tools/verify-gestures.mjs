@@ -230,6 +230,9 @@ try {
   const zoomedIn = await lbState();
   assert(zoomedIn.scale > first.scale, "工具条 + 号放大", fmt(first.scale) + " → " + fmt(zoomedIn.scale));
 
+  /* 顺手把「查看器打开着」的样子截下来，README 与目录列表要用（关闭状态下截图没意义） */
+  await lb.screenshot({ path: path.join(OUT, "lightbox-desktop-open.png") });
+
   await lb.evaluate(() => window.lightboxHarness.clickToolbar("Actual size (100%)"));
   await lb.waitForTimeout(80);
   const actual = await lbState();
