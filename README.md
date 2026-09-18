@@ -7,6 +7,8 @@ Handy for wide diagrams, tables and screenshots that are unreadable at 100% in t
 
 [![License](https://img.shields.io/badge/license-MIT-7159a3)](LICENSE)
 
+![A note on the zoomable board, zoomed to 135%](docs/images/screenshot-desktop.png)
+
 ## Why this exists
 
 Obsidian's reading view cannot be pinch-zoomed on mobile, and no theme can change that: the app

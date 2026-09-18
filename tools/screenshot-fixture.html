@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Zoomable Reader · 截图夹具</title>
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  /* 模拟一个 Obsidian 主题的变量层（这里是墨韵的纸面色），
+     让截图看起来就是插件在真实主题下的样子 —— 插件本身只用公开 CSS 变量。 */
+  :root {
+    --background-primary: #fdfcf9;
+    --background-secondary: #f2efe8;
+    --background-modifier-border: #e2ddd2;
+    --background-modifier-hover: rgba(90, 80, 60, 0.07);
+    --text-normal: #33302a;
+    --text-muted: #6f695e;
+    --text-accent: #3a6ea5;
+    --radius-s: 5px;
+    --radius-m: 8px;
+    --shadow-s: 0 1px 2px rgba(60, 50, 30, 0.10), 0 2px 8px rgba(60, 50, 30, 0.06);
+    --font-ui-small: 13px;
+    --font-text: "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", system-ui, sans-serif;
+  }
+  html, body { margin: 0; height: 100%; font-family: var(--font-text); color: var(--text-normal); background: var(--background-secondary); }
+  .zr-root { display: flex; flex-direction: column; height: 100%; }
+  .zr-page { padding: 28px 32px; line-height: 1.8; }
+  .zr-page h1 { font-size: 1.7em; margin: 0 0 0.6em; }
+  .zr-page h2 { font-size: 1.22em; margin: 1.4em 0 0.5em; }
+  .zr-page p { margin: 0 0 0.9em; text-indent: 2em; }
+  .zr-page table { width: 100%; border-collapse: collapse; font-size: 0.94em; margin: 0.6em 0 1em; }
+  .zr-page th, .zr-page td { border: 1px solid var(--background-modifier-border); padding: 6px 10px; text-align: left; }
+  .zr-page th { background: #f0ece3; }
+  .note-meta { color: var(--text-muted); font-size: 0.86em; text-indent: 0; }
+</style>
+</head>
+<body>
+<div class="zr-root">
+  <div class="zr-toolbar">
+    <button class="zr-btn" aria-label="Zoom out">−</button>
+    <button class="zr-label">135%</button>
+    <button class="zr-btn" aria-label="Zoom in">+</button>
+    <button class="zr-btn" aria-label="Fit width">⇔</button>
+  </div>
+  <div class="zr-viewport" id="viewport">
+    <div class="zr-canvas" id="canvas">
+      <div class="markdown-preview-view markdown-rendered zr-page" id="page">
+        <h1>无息贷款核销流程</h1>
+        <p class="note-meta">2026-09-18 · 内部文档</p>
+        <p>核销是整条链路里最容易出错的一步：它同时改动核验记录、行为流水与额度占用三处状态，
+          任何一处不一致都会在 UAT 回归时暴露成「余额对不上」。下面这张流程图把每一步的状态变更画了出来。</p>
+        <div class="mermaid" id="diagram">
+          <svg viewBox="0 0 1180 220" width="1180" height="220" role="graphics-document">
+            <g fill="#eef3f8" stroke="#3a6ea5" stroke-width="1.5">
+              <rect x="10" y="70" width="190" height="64" rx="8"></rect>
+              <rect x="250" y="70" width="200" height="64" rx="8"></rect>
+              <rect x="500" y="20" width="200" height="64" rx="8"></rect>
+              <rect x="500" y="130" width="200" height="64" rx="8"></rect>
+              <rect x="750" y="70" width="200" height="64" rx="8"></rect>
+              <rect x="990" y="70" width="180" height="64" rx="8"></rect>
+            </g>
+            <g fill="#2f4a63" font-size="16" text-anchor="middle" font-family="inherit">
+              <text x="105" y="108">提交核销请求</text>
+              <text x="350" y="108">校验白名单与额度</text>
+              <text x="600" y="58">占用额度</text>
+              <text x="600" y="168">写行为流水</text>
+              <text x="850" y="108">更新核验记录</text>
+              <text x="1080" y="108">回执落库</text>
+            </g>
+            <g stroke="#7a95ad" stroke-width="1.5" fill="none" marker-end="url(#a)">
+              <path d="M200 102 L250 102"></path>
+              <path d="M450 96 L500 60"></path>
+              <path d="M450 110 L500 152"></path>
+              <path d="M700 52 L780 92"></path>
+              <path d="M700 162 L780 118"></path>
+              <path d="M950 102 L990 102"></path>
+            </g>
+            <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#7a95ad"></path></marker></defs>
+          </svg>
+        </div>
+        <p>流程里有三个必须写清的约束，否则联调时对不上：</p>
+        <table>
+          <thead><tr><th>步骤</th><th>状态变更</th><th>幂等键</th><th>失败回滚</th></tr></thead>
+          <tbody>
+            <tr><td>占用额度</td><td>可用 → 冻结</td><td>requestNo</td><td>释放冻结</td></tr>
+            <tr><td>写行为流水</td><td>追加一条</td><td>requestNo + seq</td><td>流水不可删，只记冲正</td></tr>
+            <tr><td>更新核验记录</td><td>待核销 → 已核销</td><td>verifyId</td><td>状态回退 + 冲正流水</td></tr>
+          </tbody>
+        </table>
+        <h2>常见坑</h2>
+        <p>并发下的重复提交必须靠状态机 CAS 拦住，不能靠先查后写；查与写之间的窗口正是重复核销的入口。</p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

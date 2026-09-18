@@ -12,7 +12,8 @@
     "verify:gestures": "npm run build:tests && node tools/verify-gestures.mjs",
     "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run verify:gestures",
     "build:tests": "esbuild tests/browser/entry.ts --bundle --format=iife --outfile=tests/browser/out/zoom-pan.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "screenshots": "npm run build:tests && node tools/make-screenshots.mjs"
   },
   "keywords": [
     "obsidian",
