@@ -339,7 +339,11 @@ export class ZoomPanLayer {
     if (this.pointers.size === 0) {
       this.dragging = false;
       if (point && !this.moved) this.handleTap(point);
-      this.moved = false;
+      /* 刻意【不】在这里清 moved：紧跟其后的 click 还要用它来判断
+       * 「这次点击是拖动的尾巴，不该当成点击」。
+       * 反例（实测踩到）：拖动图片查看器后 click 的 target 会变成视口，
+       * 若此时 moved 已归零，查看器会把拖动误判成「点空白」而自己关掉。
+       * moved 会在下一次 pointerdown 时归零，也会在 onClickCapture 消费后归零。 */
     }
   };
 
@@ -367,7 +371,9 @@ export class ZoomPanLayer {
 
   private onClickCapture = (event: MouseEvent): void => {
     if (!this.moved) return;
-    /* 拖动结束后的那次 click 属于“平移”而非“点击链接” */
+    this.moved = false;
+    /* 拖动结束后的那次 click 属于「平移」而非「点击」：
+     * 既不能点开链接，也不能被上层当成「点空白背景」。 */
     event.preventDefault();
     event.stopPropagation();
   };

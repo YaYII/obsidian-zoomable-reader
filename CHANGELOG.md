@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.0
+
+- **Image and diagram viewer.** Click an image in a note to open it full screen, zoomed to fit;
+  zoom with the wheel (Ctrl or Cmd and wheel), the toolbar buttons, `+` / `-` / `0`, or a pinch on
+  mobile; drag to pan; double-click toggles 100% and the fit scale. `Esc`, the close button or a
+  click on the empty background closes it.
+- The toolbar shows the image's real pixel size next to the size you are currently looking at
+  (for example `1600 x 900 px → 852 x 479 px`), so you always know how far in you are.
+- **Diagrams open in the same viewer.** Clicking a Mermaid diagram moves it into the viewer and
+  puts it back afterwards, which keeps the theme's `#id`-scoped styling intact instead of
+  re-rendering a copy.
+- Three new settings: click images to open a zoomable viewer, click diagrams to open a zoomable
+  viewer, and fit to window when the viewer opens.
+- Verified with 43 assertions driven by real events in Chromium, including this release's new
+  ones: opening by a real click, fit scale, toolbar zoom, wheel zoom with the anchor invariant,
+  drag panning, `Esc`, background-click close, diagram move-and-restore, and a mobile pass
+  (touch to open, pinch to zoom, overlay fully removed on close).
+
+Fixed along the way, both found by that harness rather than by reading code:
+
+- The pan flag used to be cleared on `pointerup`, so the `click` that ends a drag was treated as a
+  click on empty space and closed the viewer. It now survives until the click is consumed.
+- The viewer used Obsidian's `addClass` helper, which does not exist in a plain browser; the
+  overlay ended up in the DOM while the module thought it had never opened, so every control was
+  dead. It now uses standard `classList` and only attaches to the DOM once fully built.
+
 ## 1.0.0
 
 First release.

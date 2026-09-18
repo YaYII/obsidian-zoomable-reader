@@ -192,6 +192,151 @@ try {
   assert(pageErrors.length === 0, "桌面验证台无脚本错误", pageErrors.slice(0, 2).join(" | ") || "无");
   await desktop.close();
 
+
+  /* ======================= 三、查看器：点图放大 ======================= */
+  console.log("\n=== 查看器 900x700（真实点击 / 滚轮 / 拖动 / ESC）===");
+  const lbCtx = await browser.newContext({ viewport: { width: 900, height: 700 } });
+  const lb = await lbCtx.newPage();
+  const lbErrors = [];
+  lb.on("pageerror", (e) => lbErrors.push(String((e && e.message) || e)));
+  await lb.goto(pathToFileURL(path.join(ROOT, "tests", "browser", "lightbox.html")).href, { waitUntil: "load" });
+  await lb.waitForFunction(() => window.lightboxHarness && document.getElementById("photo").naturalWidth > 0);
+
+  const lbState = () => lb.evaluate(() => window.lightboxHarness.transform());
+  const lbRect = await lb.evaluate(() => window.lightboxHarness.rect());
+
+  await lb.click("#photo");
+  await lb.waitForTimeout(120);
+  const opened = await lb.evaluate(() => ({
+    open: window.lightboxHarness.isOpen(),
+    overlays: window.lightboxHarness.overlayCount(),
+    label: window.lightboxHarness.label(),
+    size: window.lightboxHarness.sizeText(),
+    moved: window.lightboxHarness.diagramParentIsOverlay(),
+    inPlace: window.lightboxHarness.diagramBackInPlace(),
+  }));
+  const first = await lbState();
+  assert(opened.open && opened.overlays === 1, "点击图片 → 打开查看器（且只有一个浮层）", "overlays=" + opened.overlays);
+  assert(/^\d+ x \d+ px/.test(String(opened.size)), "工具条显示原始尺寸与当前显示尺寸", String(opened.size));
+  assert(opened.inPlace && !opened.moved, "未打开图表时，图表仍在原位", "inPlace=" + opened.inPlace);
+
+  const lbRect2 = await lb.evaluate(() => window.lightboxHarness.rect());
+  const expectedFit = (lbRect2.width - 48) / 1600;
+  assert(Math.abs(first.scale - expectedFit) < 0.02, "打开即适配窗口（按 1600px 自然宽度算比例）",
+    "scale=" + fmt(first.scale) + " 期望 " + fmt(expectedFit));
+
+  await lb.evaluate(() => window.lightboxHarness.clickToolbar("Zoom in"));
+  await lb.waitForTimeout(80);
+  const zoomedIn = await lbState();
+  assert(zoomedIn.scale > first.scale, "工具条 + 号放大", fmt(first.scale) + " → " + fmt(zoomedIn.scale));
+
+  await lb.evaluate(() => window.lightboxHarness.clickToolbar("Actual size (100%)"));
+  await lb.waitForTimeout(80);
+  const actual = await lbState();
+  assert(Math.abs(actual.scale - 1) < 0.001, "1:1 按钮回到 100%", "scale=" + fmt(actual.scale));
+
+  const lbCenter = { x: lbRect2.left + lbRect2.width / 2, y: lbRect2.top + lbRect2.height / 2 };
+  const lbAnchor = { x: lbRect2.left + 300, y: lbRect2.top + 200 };
+  await lb.mouse.move(lbAnchor.x, lbAnchor.y);
+  const beforeWheel = await lbState();
+  await lb.keyboard.down("Control");
+  await lb.mouse.wheel(0, -240);
+  await lb.keyboard.up("Control");
+  await lb.waitForTimeout(80);
+  const afterWheel = await lbState();
+  const contentBefore = { x: (lbAnchor.x - lbRect2.left - beforeWheel.x) / beforeWheel.scale, y: (lbAnchor.y - lbRect2.top - beforeWheel.y) / beforeWheel.scale };
+  const contentAfter = { x: (lbAnchor.x - lbRect2.left - afterWheel.x) / afterWheel.scale, y: (lbAnchor.y - lbRect2.top - afterWheel.y) / afterWheel.scale };
+  assert(afterWheel.scale > beforeWheel.scale, "查看器里 Ctrl+滚轮放大", fmt(beforeWheel.scale) + " → " + fmt(afterWheel.scale));
+  assert(near(contentAfter.x, contentBefore.x, 0.6) && near(contentAfter.y, contentBefore.y, 0.6),
+    "查看器同样遵守锚点不变量（光标下的像素不动）",
+    "内容坐标 (" + fmt(contentBefore.x) + "," + fmt(contentBefore.y) + ") → (" + fmt(contentAfter.x) + "," + fmt(contentAfter.y) + ")");
+
+  const panBefore = await lbState();
+  await lb.mouse.move(lbCenter.x, lbCenter.y);
+  await lb.mouse.down();
+  await lb.mouse.move(lbCenter.x + 70, lbCenter.y + 40, { steps: 8 });
+  await lb.mouse.up();
+  await lb.waitForTimeout(80);
+  const panAfter = await lbState();
+  assert(near(panAfter.x - panBefore.x, 70, 3) && near(panAfter.y - panBefore.y, 40, 3),
+    "查看器里拖动平移", "Δx=" + fmt(panAfter.x - panBefore.x) + " Δy=" + fmt(panAfter.y - panBefore.y));
+
+  await lb.keyboard.press("Escape");
+  await lb.waitForTimeout(120);
+  const closed = await lb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), overlays: window.lightboxHarness.overlayCount() }));
+  assert(!closed.open && closed.overlays === 0, "ESC 关闭查看器（浮层完全移除）", "overlays=" + closed.overlays);
+
+  await lb.click("#photo");
+  await lb.waitForTimeout(100);
+  await lb.mouse.click(lbRect2.left + lbRect2.width - 30, lbRect2.top + lbRect2.height - 30);
+  await lb.waitForTimeout(120);
+  const closedByBackground = await lb.evaluate(() => window.lightboxHarness.isOpen());
+  assert(!closedByBackground, "点击空白背景也能关闭", "open=" + closedByBackground);
+
+  await lb.click(".mermaid svg");
+  await lb.waitForTimeout(120);
+  const diagramOpen = await lb.evaluate(() => ({
+    open: window.lightboxHarness.isOpen(),
+    moved: window.lightboxHarness.diagramParentIsOverlay(),
+  }));
+  assert(diagramOpen.open && diagramOpen.moved, "点击图表 → 图表被搬进查看器（保留原样式作用域）", "moved=" + diagramOpen.moved);
+  await lb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await lb.waitForTimeout(120);
+  const svgRestored = await lb.evaluate(() => window.lightboxHarness.diagramBackInPlace());
+  assert(svgRestored, "关闭后图表放回原位", "inPlace=" + svgRestored);
+
+  await lb.screenshot({ path: path.join(OUT, "lightbox-desktop.png") });
+  assert(lbErrors.length === 0, "查看器验证台无脚本错误", lbErrors.slice(0, 2).join(" | ") || "无");
+  await lbCtx.close();
+
+
+  /* ======================= 四、查看器（手机触摸） ======================= */
+  console.log("\n=== 查看器 手机 390x780（触摸打开 / 双指放大）===");
+  const mLbCtx = await browser.newContext({
+    viewport: { width: 390, height: 780 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const mLb = await mLbCtx.newPage();
+  const mLbErrors = [];
+  mLb.on("pageerror", (e) => mLbErrors.push(String((e && e.message) || e)));
+  await mLb.goto(pathToFileURL(path.join(ROOT, "tests", "browser", "lightbox.html")).href, { waitUntil: "load" });
+  await mLb.waitForFunction(() => window.lightboxHarness && document.getElementById("photo").naturalWidth > 0);
+  const mLbClient = await mLbCtx.newCDPSession(mLb);
+  const mTouch = (type, points) =>
+    mLbClient.send("Input.dispatchTouchEvent", {
+      type: type,
+      touchPoints: points.map((pt, i) => ({ x: pt.x, y: pt.y, radiusX: 8, radiusY: 8, force: 1, id: pt.id === undefined ? i + 1 : pt.id })),
+    });
+
+  const photoBox = await mLb.locator("#photo").boundingBox();
+  await mTouch("touchStart", [{ x: photoBox.x + photoBox.width / 2, y: photoBox.y + photoBox.height / 2 }]);
+  await mTouch("touchEnd", []);
+  await mLb.waitForTimeout(150);
+  const mOpened = await mLb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), label: window.lightboxHarness.label() }));
+  assert(mOpened.open, "手机：触摸图片 → 打开查看器", "label=" + mOpened.label);
+
+  const mBefore = await mLb.evaluate(() => window.lightboxHarness.transform());
+  await mTouch("touchStart", [{ x: 120, y: 400, id: 1 }, { x: 220, y: 400, id: 2 }]);
+  for (let i = 1; i <= 8; i++) {
+    await mTouch("touchMove", [{ x: 120 - i * 5, y: 400, id: 1 }, { x: 220 + i * 5, y: 400, id: 2 }]);
+  }
+  await mTouch("touchEnd", []);
+  await mLb.waitForTimeout(120);
+  const mAfter = await mLb.evaluate(() => window.lightboxHarness.transform());
+  assert(mAfter && mBefore && mAfter.scale > mBefore.scale * 1.5,
+    "手机：查看器里双指张开 → 放大（距离翻倍 ≈ 2 倍）",
+    fmt(mBefore ? mBefore.scale : 0) + " → " + fmt(mAfter ? mAfter.scale : 0));
+
+  await mLb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await mLb.waitForTimeout(100);
+  const mClosed = await mLb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), overlays: window.lightboxHarness.overlayCount() }));
+  assert(!mClosed.open && mClosed.overlays === 0, "手机：关闭后浮层彻底移除", "overlays=" + mClosed.overlays);
+  await mLb.screenshot({ path: path.join(OUT, "lightbox-mobile.png") });
+  assert(mLbErrors.length === 0, "查看器手机验证台无脚本错误", mLbErrors.slice(0, 2).join(" | ") || "无");
+  await mLbCtx.close();
+
   /* ======================= 二、手机：真实触摸事件 ======================= */
   console.log("\n=== 手机视口 390x780（CDP 合成触摸：单指拖动 / 双指捏合 / 双击）===");
   const mobile = await browser.newContext({

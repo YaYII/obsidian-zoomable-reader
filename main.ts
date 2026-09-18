@@ -1,5 +1,6 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./src/defaults";
+import { ImageLightbox, registerLightboxClicks } from "./src/lightbox";
 import { ZoomableReaderSettingTab, ZoomableReaderSettings } from "./src/settings";
 import { Transform, normalizeTransform } from "./src/zoom-pan";
 import { VIEW_TYPE_ZOOMABLE_READER, ZoomableReaderView } from "./src/view";
@@ -9,6 +10,7 @@ export default class ZoomableReaderPlugin extends Plugin {
   /** 每篇笔记的缩放与位置：只存在本地 data.json，不做任何网络请求。 */
   positions: Record<string, Transform> = {};
   private saveTimer: number | null = null;
+  private lightbox: ImageLightbox | null = null;
 
   async onload(): Promise<void> {
     await this.loadPersisted();
@@ -36,6 +38,39 @@ export default class ZoomableReaderPlugin extends Plugin {
     });
 
     this.addSettingTab(new ZoomableReaderSettingTab(this.app, this));
+    this.registerLightbox();
+  }
+
+  /**
+   * 点击笔记里的图片 / 图表 → 打开可缩放查看器。
+   * 判定逻辑在 src/lightbox.ts 的 findLightboxTarget / registerLightboxClicks 里，
+   * 那部分刻意不依赖 obsidian，因此在真实浏览器里可以用真点击验证。
+   */
+  private registerLightbox(): void {
+    const doc = this.app.workspace.containerEl.ownerDocument;
+    const detach = registerLightboxClicks(doc, {
+      images: this.settings.imageViewer,
+      diagrams: this.settings.diagramViewer,
+      onTarget: (found) => {
+        const lightbox = this.openLightbox();
+        if (found.kind === "image") lightbox.openImage(found.element as HTMLImageElement);
+        else lightbox.openNode(found.element, { title: "Mermaid diagram" });
+      },
+    });
+    this.register(detach);
+  }
+
+  private openLightbox(): ImageLightbox {
+    if (!this.lightbox) {
+      this.lightbox = new ImageLightbox(this.app.workspace.containerEl.ownerDocument, {
+        fitOnOpen: this.settings.lightboxFitOnOpen,
+        maxScale: this.settings.maxScale,
+      });
+      this.register(() => {
+        if (this.lightbox) this.lightbox.close();
+      });
+    }
+    return this.lightbox;
   }
 
   onunload(): void {

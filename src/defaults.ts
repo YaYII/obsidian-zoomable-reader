@@ -7,4 +7,7 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   maxScale: 8,
   showToolbar: true,
   padding: 16,
+  imageViewer: true,
+  diagramViewer: true,
+  lightboxFitOnOpen: true,
 };

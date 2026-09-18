@@ -13,6 +13,12 @@ export interface ZoomableReaderSettings {
   showToolbar: boolean;
   /** 版心四周留白（px） */
   padding: number;
+  /** 点击笔记里的图片 → 打开可缩放查看器 */
+  imageViewer: boolean;
+  /** 点击 Mermaid 图表 → 打开可缩放查看器 */
+  diagramViewer: boolean;
+  /** 查看器打开时先适配窗口（关掉则先按 100%） */
+  lightboxFitOnOpen: boolean;
 }
 
 export { DEFAULT_SETTINGS };
@@ -89,6 +95,36 @@ export class ZoomableReaderSettingTab extends PluginSettingTab {
             this.plugin.settings.padding = value;
             await this.plugin.saveSettings();
           })
+      );
+
+    new Setting(container)
+      .setName("Click images to open a zoomable viewer")
+      .setDesc("Opens the image full screen with wheel zoom, drag to pan and zoom buttons. Works on desktop and mobile.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.imageViewer).onChange(async (value) => {
+          this.plugin.settings.imageViewer = value;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(container)
+      .setName("Click diagrams to open a zoomable viewer")
+      .setDesc("Mermaid diagrams open in the same viewer, so you can zoom into a dense flow chart.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.diagramViewer).onChange(async (value) => {
+          this.plugin.settings.diagramViewer = value;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(container)
+      .setName("Fit to window when the viewer opens")
+      .setDesc("Off: images open at 100% instead of being scaled to fit.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.lightboxFitOnOpen).onChange(async (value) => {
+          this.plugin.settings.lightboxFitOnOpen = value;
+          await this.plugin.saveSettings();
+        })
       );
 
     new Setting(container)

@@ -106,3 +106,105 @@ body.is-mobile .zr-label {
   min-width: 40px;
   height: 40px;
 }
+
+/* ============================================================================
+ * 图片 / 图表查看器（灯箱）
+ * 全屏浮层 + 工具条，配色全部取自 Obsidian 公开变量，跟随任何主题。
+ * ========================================================================== */
+
+.zr-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-modal, 100);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background-primary);
+  touch-action: none;
+}
+
+.zr-lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+}
+
+.zr-lightbox-btn,
+.zr-lightbox-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small, 13px);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.zr-lightbox-btn:hover,
+.zr-lightbox-label:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.zr-lightbox-label {
+  min-width: 62px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.zr-lightbox-size {
+  margin-inline-start: auto;
+  padding-inline-end: 10px;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller, 12px);
+  font-variant-numeric: tabular-nums;
+}
+
+.zr-lightbox-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  background-color: var(--background-secondary);
+  cursor: grab;
+}
+
+.zr-lightbox-viewport:active {
+  cursor: grabbing;
+}
+
+.zr-lightbox-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.zr-lightbox-image,
+.zr-lightbox-node svg {
+  display: block;
+  background-color: var(--background-primary);
+  border-radius: var(--radius-s, 4px);
+  box-shadow: var(--shadow-s, 0 1px 3px rgba(0, 0, 0, 0.12));
+}
+
+/* 打开查看器时锁住底层滚动，减少手机上的误触 */
+body.zr-lightbox-open {
+  overflow: hidden;
+}
+
+body.is-mobile .zr-lightbox-btn,
+body.is-mobile .zr-lightbox-label {
+  min-width: 42px;
+  height: 42px;
+}

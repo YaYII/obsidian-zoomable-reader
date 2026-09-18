@@ -57,7 +57,23 @@ Notes:
 | Maximum zoom | 8x | Upper limit for pinch and wheel zoom |
 | Show toolbar | on | Zoom buttons and the zoom label |
 | Page padding | 16px | Gap between the note and the edge of the view |
+| Click images to open a zoomable viewer | on | Opens images full screen with zoom and pan |
+| Click diagrams to open a zoomable viewer | on | Same viewer for Mermaid diagrams |
+| Fit to window when the viewer opens | on | Off: images open at 100% |
 | Clear saved zoom and positions | — | Forgets every note's saved zoom |
+
+## Image viewer
+
+Click any image in a note (or a Mermaid diagram) to open it full screen:
+
+![The image viewer, zoomed into a 1600 x 900 screenshot](docs/images/screenshot-viewer.png)
+
+- Zoom: mouse wheel with **Ctrl** or **Cmd**, the toolbar buttons, `+` / `-` / `0`, or a two-finger
+  pinch on mobile.
+- Pan: drag. Double-click (or double-tap) toggles between 100% and fit.
+- Close: `Esc`, the `x` button, or a click on the empty background.
+- The toolbar shows the real size and the size currently on screen, so you can tell when you are
+  at 100% of a 4K screenshot.
 
 ## Installation
 
