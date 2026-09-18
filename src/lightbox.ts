@@ -80,31 +80,37 @@ export class ImageLightbox {
      * getBoundingClientRect() 在 Chromium 里都返回 0 —— 实测踩到过：
      * 钉尺寸那段代码永远拿不到宽高，于是「其它 svg 放大失效」照旧。
      * 现在先量、先钉，再搬。 */
-    if (node instanceof SVGGraphicsElement) {
-      let width = 0;
-      let height = 0;
+    /* 判据用「鸭子类型」而不是 instanceof：这个文件刻意不依赖 obsidian 模块（要能在真实
+     * Chromium 里用真事件验证），而弹窗（popout window）里的元素属于【另一个 realm】——
+     * 主窗口的 SVGGraphicsElement 构造器认不出它，instanceof 会静默为 false，
+     * 于是弹窗里的图表拿不到像素钉尺寸（表现就是「只有主窗口的图能放大」）。
+     * getBBox 有没有，是与 realm 无关的判据。 */
+    const graphics = node as Partial<SVGGraphicsElement>;
+    if (typeof graphics.getBBox === "function" && typeof graphics.getBoundingClientRect === "function") {
+      /* 两份尺寸，用途不同，别混：
+       *   ① getBoundingClientRect()：它在【笔记里的实际渲染尺寸】—— 钉这个值，
+       *      svg 的缩放比例就与笔记里完全一致，foreignObject 里的 HTML 标签不会重排；
+       *   ② getBBox()：图自身的用户单位尺寸 —— 只用来显示「原始尺寸」读数。
+       * 早期版本钉的是 ②（getBBox），当主题把图压到版心内（scale<1）时，
+       * 钉完等于把图放大回 100% —— 标签按新尺寸重排、撑破外框，就是用户截图里
+       * 「放大后编成鬼样子」的根因。 */
+      const rendered = graphics.getBoundingClientRect();
+      let natural = { width: 0, height: 0 };
       try {
-        const box = node.getBBox();
-        width = box.width;
-        height = box.height;
+        const box = graphics.getBBox();
+        natural = { width: box.width, height: box.height };
       } catch {
-        /* 某些渲染器下 getBBox 会抛，退回下面的 rect */
+        /* 某些渲染器下 getBBox 会抛，退回渲染尺寸 */
       }
-      if (!width || !height) {
-        const rect = node.getBoundingClientRect();
-        width = rect.width;
-        height = rect.height;
-      }
-      this.naturalWidth = Math.round(width);
-      this.naturalHeight = Math.round(height);
-      /* 把 svg 的尺寸钉成像素：别的插件画出来的 svg 常常只有 viewBox 或
-       * width="100%"，放进 width: max-content 的画布后自身尺寸成循环依赖，
-       * 表现就是「适配顶到上限、再放大没反应」。 */
-      if (width > 0 && height > 0) {
+      this.naturalWidth = Math.round(natural.width || rendered.width);
+      this.naturalHeight = Math.round(natural.height || rendered.height);
+      /* 钉住【渲染尺寸】：别的插件画出来的 svg 常常只有 viewBox 或 width="100%"，
+       * 放进 width: max-content 的画布后自身尺寸成循环依赖（适配顶到上限、再放大没反应）。 */
+      if (rendered.width > 0 && rendered.height > 0) {
         const style = (node as unknown as { style?: CSSStyleDeclaration }).style;
         if (style) {
-          style.width = Math.round(width) + "px";
-          style.height = Math.round(height) + "px";
+          style.width = Math.round(rendered.width) + "px";
+          style.height = Math.round(rendered.height) + "px";
           style.maxWidth = "none";
         }
       }
@@ -117,6 +123,13 @@ export class ImageLightbox {
     this.moved = { node: node, parent: node.parentNode, nextSibling: node.nextSibling };
     const holder = this.doc.createElement("div");
     holder.className = "zr-lightbox-node";
+    /* 关键：把图表的「祖先语义」一起带进来。
+     * 主题（以及 Obsidian 自己的 app.css）里，图表的文字样式全部挂在 .mermaid 这个类下面：
+     * .mermaid svg text / .nodeLabel / .label / .labelText 的字号、颜色、行高。
+     * 只搬 <svg> 而不带这个类，图内 HTML 标签（foreignObject 里的 <span>）就会掉回
+     * Mermaid 的内联字号 —— 实测表现为标签撑破自己的外框、文字互相覆盖，
+     * 也就是用户截图里那张「鬼样子」。这里的 .mermaid 只是语义标记，外观仍由主题决定。 */
+    if (node.namespaceURI === SVG_NS) holder.classList.add("mermaid");
     holder.appendChild(node);
     if (meta && meta.title) holder.setAttribute("data-title", meta.title);
     this.build(holder, node);

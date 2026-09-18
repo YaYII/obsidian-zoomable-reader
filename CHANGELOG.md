@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.3
+
+- **The viewer keeps the diagram's ancestor semantics.** Moving only the `<svg>` into the viewer
+  dropped the `.mermaid` class from its ancestry — and every text style a theme (or Obsidian's own
+  `app.css`) declares for diagrams hangs off that class: `.mermaid svg text`, `.nodeLabel`,
+  `.label`, `.labelText` — font size, colour, line height. Without it, the HTML labels Mermaid
+  renders inside `foreignObject` fell back to Mermaid's inline font size, and because those labels
+  are sized by their own `<span>`, they overflowed their boxes and overlapped each other. The
+  holder now carries the class. It is only a semantic marker; the appearance still comes from the
+  theme.
+- **The pinned size is the rendered size, not `getBBox()`.** The two are not the same thing: a
+  theme that fits a diagram to the text column renders it at, say, 80%, while `getBBox()` reports
+  the diagram's own user units. Pinning the latter meant the viewer silently scaled the diagram back
+  to 100%, so every label reflowed and overflowed — the *"放大后编成鬼样子"* screenshot.
+  `getBoundingClientRect()` now supplies the pinned pixels, and `getBBox()` is kept only for the
+  "original size" readout.
+
+Verification: new `tools/verify-diagram-labels.mjs` (`npm run verify:labels`), wired into
+`npm run check`. It builds a real page, loads the built theme and the plugin's `styles.css`,
+renders an actual Mermaid flowchart whose labels contain `<br/>` line breaks, measures the label
+boxes in user coordinates, opens the viewer, neutralises the canvas transform and measures again.
+**9 assertions, all passing.** It was confirmed to fail (8/9, "搬移后没有标签明显溢出外框") when the
+companion theme fix is reverted, so the guard actually fires.
+
+Companion change in the theme (1.2.4): the label resets are no longer scoped to
+`.markdown-rendered`, and the in-diagram text carries its own `font-family` and text metrics.
+
 ## 1.2.2
 
 - **The viewer shares the note's background colour** (`--background-primary`). Some parts of a

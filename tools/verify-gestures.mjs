@@ -203,7 +203,6 @@ try {
   await lb.waitForFunction(() => window.lightboxHarness && document.getElementById("photo").naturalWidth > 0);
 
   const lbState = () => lb.evaluate(() => window.lightboxHarness.transform());
-  const lbRect = await lb.evaluate(() => window.lightboxHarness.rect());
 
   const photoBox = await lb.locator("#photo").boundingBox();
   const hostBox = await lb.locator("#diagram-host").boundingBox();
