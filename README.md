@@ -81,6 +81,9 @@ usual meaning; on touch devices, where there is no hover, a tap opens the viewer
   at 100% of a 4K screenshot.
 - Nothing is decorated: images are shown as they are, and diagrams keep their transparent
   background with solid lines and text — the same look as in the note, only bigger.
+- A diagram in the viewer looks like the diagram in the note, not merely similar: the moved
+  node keeps its `.mermaid` ancestry, so the theme's text styles still apply, and its size is
+  pinned to the size it had in the note — no silent rescale, so labels do not reflow.
 
 ## Installation
 
