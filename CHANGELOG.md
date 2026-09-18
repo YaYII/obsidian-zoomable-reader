@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.2.4
+
+- **Wider diagram boxes: boxes now follow the text, the way PlantUML lays them out.** Mermaid caps a
+  label at `flowchart.wrappingWidth = 200`, so a long Chinese label folds into four or five narrow
+  lines — a 46-character label rendered as a 215 by 143 box. Raising the cap to 460 gives 478 by 98
+  with two lines. This is a *rendering* parameter, not styling, so it cannot live in the theme: a
+  theme is CSS, and CSS cannot reach the layout engine. The plugin does it instead, and the theme
+  stays as it is.
+- **The host's own settings survive.** `mermaid.initialize()` *replaces* nested config objects
+  rather than merging them — passing `{ flowchart: { wrappingWidth: 460 } }` on its own drops
+  Obsidian's `flowchart.useMaxWidth: false` **and** `themeVariables.fontFamily:
+  var(--font-mermaid)`, which sends Chinese back to Mermaid's default `"trebuchet ms"`. The plugin
+  reads the live config first (`mermaid.mermaidAPI.getConfig()`), deep-merges its parameters on top
+  and hands the whole thing back, so `useMaxWidth`, `securityLevel` and the theme font are
+  untouched.
+- **Mermaid loads lazily**, so `window.mermaid` often does not exist yet when the plugin starts. It
+  retries (every 500 ms, up to 30 s) and re-checks on `layout-change`. Diagrams already on screen
+  pick the new layout up the next time they render.
+- Settings: **Wider diagram boxes** (on by default) and **Max label width** (240–800 px, default 460).
+
+Verification: `npm run verify:layout` — 17 assertions against real Mermaid and the real theme,
+driven through the plugin's own code (`window.DiagramLayout`), not a copy of it: the long label goes
+4 lines → 2, the box 215 px → 478 px, the host's `useMaxWidth` / `fontFamily` / `securityLevel`
+stay exactly as they were, and installing twice is a no-op. Plus 6 unit tests for the merge itself.
+
 ## 1.2.3
 
 - **The viewer keeps the diagram's ancestor semantics.** Moving only the `<svg>` into the viewer

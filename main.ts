@@ -1,5 +1,6 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./src/defaults";
+import { DEFAULT_DIAGRAM_LAYOUT, DiagramLayout, MermaidGlobal, applyDiagramLayout } from "./src/diagram-layout";
 import { ImageLightbox, installZoomAffordance } from "./src/lightbox";
 import { ZoomableReaderSettingTab, ZoomableReaderSettings } from "./src/settings";
 import { Transform, normalizeTransform } from "./src/zoom-pan";
@@ -39,6 +40,7 @@ export default class ZoomableReaderPlugin extends Plugin {
 
     this.addSettingTab(new ZoomableReaderSettingTab(this.app, this));
     this.registerLightbox();
+    this.registerDiagramLayout();
   }
 
   /**
@@ -66,6 +68,38 @@ export default class ZoomableReaderPlugin extends Plugin {
       },
     });
     this.register(detach);
+  }
+
+  /**
+   * 图表排版增强：把 Mermaid 的标签宽度上限从 200px 放宽，并给框更多留白
+   * （学 PlantUML 的「框随文字走」，理由见 src/diagram-layout.ts 顶部注释）。
+   *
+   * 两个坑：
+   *   ① 必须【深合并宿主配置】，不能整块替换 —— 否则 Obsidian 的
+   *      themeVariables.fontFamily = var(--font-mermaid) 会被冲掉，中文掉回默认字体；
+   *   ② Mermaid 是懒加载的（第一次出现图表时才注入 window.mermaid），
+   *      所以插件加载时它常常还不存在 —— 重试 + 监听 layout-change。
+   */
+  private registerDiagramLayout(): void {
+    this.applyDiagramLayoutNow();
+
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      if (this.applyDiagramLayoutNow() || tries > 60) window.clearInterval(timer);
+    }, 500);
+    this.register(() => window.clearInterval(timer));
+
+    this.registerEvent(this.app.workspace.on("layout-change", () => this.applyDiagramLayoutNow()));
+  }
+
+  /** 立即尝试装一次；返回 true 表示已经是我们想要的状态（含「功能被关掉」）。 */
+  applyDiagramLayoutNow(): boolean {
+    const layout: DiagramLayout = {
+      ...DEFAULT_DIAGRAM_LAYOUT,
+      wrapWidth: this.settings.diagramWrapWidth,
+    };
+    return applyDiagramLayout(window as unknown as { mermaid?: MermaidGlobal }, layout, this.settings.diagramLayout);
   }
 
   private openLightbox(): ImageLightbox {

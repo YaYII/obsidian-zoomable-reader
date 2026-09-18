@@ -1,6 +1,6 @@
 {
   "name": "obsidian-zoomable-reader",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Read any note on a pan-and-zoom board: pinch to zoom on mobile, Ctrl+wheel on desktop.",
   "type": "module",
   "private": true,
@@ -10,11 +10,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --dir tests",
     "verify:gestures": "npm run build:tests && node tools/verify-gestures.mjs",
-    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run verify:gestures && npm run verify:labels",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run verify:gestures && npm run verify:labels && npm run verify:layout",
     "build:tests": "esbuild tests/browser/entry.ts --bundle --format=iife --outfile=tests/browser/out/zoom-pan.js",
     "lint": "eslint .",
     "screenshots": "npm run build:tests && node tools/make-screenshots.mjs",
-    "verify:labels": "node tools/verify-diagram-labels.mjs"
+    "verify:labels": "node tools/verify-diagram-labels.mjs",
+    "verify:layout": "node tools/verify-diagram-layout.mjs"
   },
   "keywords": [
     "obsidian",

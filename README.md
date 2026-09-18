@@ -87,6 +87,29 @@ usual meaning; on touch devices, where there is no hover, a tap opens the viewer
 
 ![The same diagram in the note and in the viewer: same layout, only bigger](docs/images/screenshot-label-compare.png)
 
+## Diagram layout: boxes follow the text
+
+Mermaid caps a label at `flowchart.wrappingWidth = 200`, so a long Chinese label folds into four or
+five narrow lines. PlantUML does the opposite — a box grows to fit its text and only wraps where the
+author breaks a line — and that is the look this plugin brings to Mermaid:
+
+![Before: narrow folded boxes. After: boxes that follow the text](docs/images/screenshot-diagram-layout.png)
+
+- **Max label width** (default 460 px) replaces Mermaid's 200 px cap. A 46-character label goes from
+  four lines in a 215 px box to two lines in a 478 px box.
+- **More padding and spacing** — the box interior (15 px → 18 px), node and rank spacing, and roomier
+  sequence diagrams (participant margin 50 px → 60 px).
+- It is a *rendering* parameter, not styling: CSS cannot reach the layout engine, which is why this
+  lives in the plugin rather than in the theme.
+- Your host's own settings are left alone. `mermaid.initialize()` replaces nested config objects
+  instead of merging them, so passing a partial config would drop Obsidian's
+  `themeVariables.fontFamily: var(--font-mermaid)` and send Chinese text back to Mermaid's default
+  `trebuchet ms`. The plugin reads the live config first, merges on top of it, and hands the whole
+  thing back.
+- Mermaid loads lazily, so the plugin retries until it appears and re-checks on `layout-change`.
+  Diagrams already open pick the new layout up the next time they render.
+- Turn it off in the settings if you prefer Mermaid's own sizing.
+
 ## Installation
 
 **From the community directory** (after this plugin is published): Settings → Community plugins →

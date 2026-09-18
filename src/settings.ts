@@ -23,6 +23,10 @@ export interface ZoomableReaderSettings {
   clickToOpenViewer: boolean;
   /** 右上角放大按钮常驻显示（默认开；关掉则只有悬停时出现） */
   persistentZoomButton: boolean;
+  /** 图表排版增强：放宽 Mermaid 的标签最大宽度、给框更多留白（学 PlantUML「框随文字走」） */
+  diagramLayout: boolean;
+  /** 标签最大宽度（px）：越大越接近不折行，460 是实测的中文舒适值 */
+  diagramWrapWidth: number;
 }
 
 export { DEFAULT_SETTINGS };
@@ -149,6 +153,35 @@ export class ZoomableReaderSettingTab extends PluginSettingTab {
           this.plugin.settings.lightboxFitOnOpen = value;
           await this.plugin.saveSettings();
         })
+      );
+
+    new Setting(container)
+      .setName("Wider diagram boxes")
+      .setDesc(
+        "Mermaid caps a label at 200px, so long Chinese labels fold into four or five narrow lines. " +
+          "This widens that cap and adds padding, so boxes follow the text — the way PlantUML lays them out. " +
+          "Diagrams that are already open pick it up the next time they render."
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.diagramLayout).onChange(async (value) => {
+          this.plugin.settings.diagramLayout = value;
+          await this.plugin.saveSettings();
+          this.plugin.applyDiagramLayoutNow();
+        })
+      );
+
+    new Setting(container)
+      .setName("Max label width")
+      .setDesc("How wide one label may get before it wraps, in pixels (default 460; up to 800 for almost no wrapping).")
+      .addSlider((slider) =>
+        slider
+          .setLimits(240, 800, 20)
+          .setValue(this.plugin.settings.diagramWrapWidth)
+          .onChange(async (value) => {
+            this.plugin.settings.diagramWrapWidth = value;
+            await this.plugin.saveSettings();
+            this.plugin.applyDiagramLayoutNow();
+          })
       );
 
     new Setting(container)
