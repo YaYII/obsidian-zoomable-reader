@@ -6,10 +6,10 @@ import { ZoomableReaderSettingTab, ZoomableReaderSettings } from "./src/settings
 import type { ReaderMode, ZoomButtonCorner } from "./src/settings-spec";
 import { BOARD_MIN_SCALE, MIN_SCALE, Transform, normalizeTransform } from "./src/zoom-pan";
 
-/** 存下来的变换，外加「当时用的卡片宽度」：白板的几何由卡片宽度决定，
- *  宽度变了旧位置就不适用了（否则用户改完纸张大小会在板子上落到莫名其妙的地方）。 */
+/** 存下来的变换，外加「当时用的白板版面宽度」：版面宽度变了，旧位置就不适用了
+ *  （否则用户改完宽度会在板子上落到莫名其妙的地方）。 */
 interface StoredTransform extends Transform {
-  card?: number;
+  pageWidth?: number;
 }
 import { VIEW_TYPE_ZOOMABLE_READER, ZoomableReaderView } from "./src/view";
 
@@ -268,20 +268,20 @@ export default class ZoomableReaderPlugin extends Plugin {
     return mode === "board" ? path + POSITION_SEPARATOR : path;
   }
 
-  getPosition(path: string, mode: ReaderMode = "page", cardWidth?: number): Transform | null {
+  getPosition(path: string, mode: ReaderMode = "page", pageWidth?: number): Transform | null {
     const min = mode === "board" ? BOARD_MIN_SCALE : MIN_SCALE;
     const raw = this.positions[this.keyFor(path, mode)] as StoredTransform | undefined;
     if (!raw) return null;
-    /* 白板：卡片宽度变了，旧位置就不算数（几何全变了）——回到「原大」比落到乱处好。 */
-    if (mode === "board" && typeof cardWidth === "number" && typeof raw.card === "number") {
-      if (Math.abs(raw.card - cardWidth) > 0.5) return null;
+    /* 白板：版面宽度变了，旧位置就不算数（版面几何全变了）——回到「原大」比落到乱处好。 */
+    if (mode === "board" && typeof pageWidth === "number" && typeof raw.pageWidth === "number") {
+      if (Math.abs(raw.pageWidth - pageWidth) > 0.5) return null;
     }
     return normalizeTransform(raw, min, this.settings.maxScale);
   }
 
-  rememberPosition(path: string, mode: ReaderMode, t: Transform, cardWidth?: number): void {
+  rememberPosition(path: string, mode: ReaderMode, t: Transform, pageWidth?: number): void {
     const entry: StoredTransform = { scale: t.scale, x: t.x, y: t.y };
-    if (mode === "board" && typeof cardWidth === "number") entry.card = cardWidth;
+    if (mode === "board" && typeof pageWidth === "number") entry.pageWidth = pageWidth;
     this.positions[this.keyFor(path, mode)] = entry;
     this.scheduleSave();
   }

@@ -279,162 +279,18 @@ body.is-mobile .zr-lightbox-label {
 /* ============================================================================
  * 白板模式（board）
  * ---------------------------------------------------------------------------
- * 版面模式是「一张纸放在板子上」，白板模式是「文档被编译成卡片画布」：
- * 卡片是主体（--background-primary），板子是桌面（--background-secondary），
- * 连线走父卡右中 → 子卡左中。配色全部取自 Obsidian 公开变量，跟随任何主题。
+ * 白板模式 = 把整篇笔记渲染成【一整张】版面（宽度由设置决定，默认 1280px），
+ * 放在可以平移、缩放、往下滑的板子上读。
+ *
+ * 刻意【没有卡片、没有分栏】：只是同一张纸变宽了，正文排版全部沿用主题样式 ——
+ * 于是「白板」与「版面」的差别只有宽度，读法只有往下滑。
  * ========================================================================== */
 
-.zr-board-host {
-  position: relative;
-}
-
-/* 两种模式只显示自己那一层：版面模式下白板不占位，反之亦然 */
-.zr-mode-page .zr-board-host {
-  display: none;
-}
-
-.zr-mode-board .zr-page {
-  display: none;
-}
-
-.zr-board {
-  position: relative;
-}
-
-/* 连线层在卡片下面：先画线，卡片盖在上面，线自然收在卡片边缘 */
-.zr-board-links {
-  position: absolute;
-  top: 0;
-  left: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.zr-link {
-  fill: none;
-  stroke: var(--background-modifier-border-hover, var(--background-modifier-border));
-  stroke-width: 2;
-}
-
-.zr-card {
-  position: absolute;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background-color: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m, 8px);
-  box-shadow: var(--shadow-s, 0 1px 3px rgba(0, 0, 0, 0.12));
-}
-
-/* 根卡 = 这篇笔记本身：加粗边框 + 主题色，一眼认出「我从这里读起」 */
-.zr-card-depth-0 {
-  border-width: 2px;
-  border-color: var(--interactive-accent, var(--text-accent));
-}
-
-/* 子卡左侧一条细主题色：层级深浅在缩小时也能看出来 */
-.zr-card:not(.zr-card-depth-0) {
-  border-left: 3px solid var(--interactive-accent, var(--text-accent));
-}
-
-.zr-card-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  background-color: var(--background-secondary);
-  cursor: pointer;
-}
-
-.zr-card-title {
-  flex: 1 1 auto;
-  font-weight: 600;
-  font-size: var(--font-ui-medium, 15px);
-  line-height: 1.4;
-  color: var(--text-normal);
-  overflow-wrap: anywhere;
-}
-
-.zr-card-focus {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-s, 4px);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  box-shadow: none;
-}
-
-.zr-card-focus:hover,
-.zr-card-focus:focus-visible {
-  background-color: var(--background-modifier-hover);
-  color: var(--text-normal);
-}
-
-.zr-card-meta {
-  flex: 0 0 auto;
-  padding: 6px 10px 0;
-  color: var(--text-faint);
-  font-size: var(--font-ui-smaller, 12px);
-  line-height: 1.5;
-}
-
-.zr-card-body {
-  flex: 1 1 auto;
-  padding: 10px 12px;
-  overflow-wrap: anywhere;
-}
-
-.zr-card-body > :first-child {
-  margin-top: 0;
-}
-
-.zr-card-body > :last-child {
-  margin-bottom: 0;
-}
-
-/* 与版面模式同一条思路：缩放由本视图负责，宽内容先收进卡片再让用户放大看 */
-.zr-card-body .mermaid svg,
-.zr-card-body img,
-.zr-card-body video,
-.zr-card-body embed,
-.zr-card-body canvas {
-  max-width: 100% !important;
-  height: auto;
-}
-
-.zr-card-body .mermaid {
-  overflow-x: auto;
-}
-
-.zr-card-body table {
-  width: 100%;
-}
-
-/* 聚焦卡片时给一次过渡：拖动一按下就把过渡撤掉（否则手指会有延迟感） */
+/* 适配宽度 / 复位的过渡：一按下指针就撤掉（见 view.ts），否则拖动会有延迟感 */
 .zr-viewport.zr-animating .zr-canvas {
   transition: transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-/* 手机上把卡片头的点击区域与整体字号放大一点，拇指点得中 */
-body.is-mobile .zr-card-head {
-  padding: 10px 12px;
-}
-
-body.is-mobile .zr-card-focus {
-  width: 34px;
-  height: 34px;
-}
 
 /* 工具条最右侧的模式切换按钮 */
 .zr-btn-end {

@@ -5,8 +5,8 @@ import {
   PAPER_WIDTHS_PX,
   SETTINGS_GROUPS,
   WEB_WIDTH_PX,
-  cardWidthLabel,
   paperNameFor,
+  widthLabel,
   widthPresetName,
   widthToMm,
 } from "../src/settings-spec";
@@ -93,11 +93,11 @@ describe("设置页的双语契约", () => {
   });
 });
 
-describe("栏宽：默认 1280 网页宽（用户要求「改成网页的宽度 1280px，符合上下滑动观看」）", () => {
-  it("默认栏宽 = 1280px（网页版心）", () => {
-    expect(DEFAULT_SETTINGS.boardCardWidth).toBe(WEB_WIDTH_PX);
+describe("白板版面宽度：默认 1280 网页宽（用户要求「按 1280 的宽度展示，去掉卡片概念」）", () => {
+  it("默认白板版面宽度 = 1280px（网页版心），整篇一张版面", () => {
+    expect(DEFAULT_SETTINGS.boardWidth).toBe(WEB_WIDTH_PX);
     expect(WEB_WIDTH_PX).toBe(1280);
-    expect(widthPresetName(DEFAULT_SETTINGS.boardCardWidth)).toContain("网页宽");
+    expect(widthPresetName(DEFAULT_SETTINGS.boardWidth)).toContain("网页宽");
   });
 
   it("纸张仍是可选预设：A5 宽 148mm 在 96dpi 下 ≈ 560px", () => {
@@ -114,14 +114,14 @@ describe("栏宽：默认 1280 网页宽（用户要求「改成网页的宽度 
   });
 
   it("滑块读数说人话：网页宽给「网页宽 Web」，纸张给毫米数", () => {
-    expect(cardWidthLabel(WEB_WIDTH_PX)).toContain("网页宽");
-    expect(cardWidthLabel(PAPER_WIDTHS_PX.A5)).toContain("A5");
-    expect(cardWidthLabel(PAPER_WIDTHS_PX.A5)).toContain("148mm");
-    expect(cardWidthLabel(500)).toContain("132mm");
+    expect(widthLabel(WEB_WIDTH_PX)).toContain("网页宽");
+    expect(widthLabel(PAPER_WIDTHS_PX.A5)).toContain("A5");
+    expect(widthLabel(PAPER_WIDTHS_PX.A5)).toContain("148mm");
+    expect(widthLabel(500)).toContain("132mm");
   });
 
   it("滑块范围能选到 1280（默认值）与 A4", () => {
-    const spec = ALL_SETTING_SPECS.find((s) => s.id === "board-card-width");
+    const spec = ALL_SETTING_SPECS.find((s) => s.id === "board-width");
     expect(spec?.control).toBe("slider");
     const slider = spec as { min: number; max: number; step: number };
     expect(slider.max).toBeGreaterThanOrEqual(WEB_WIDTH_PX);
@@ -149,9 +149,20 @@ describe("这次用户提的具体要求", () => {
     expect(text).toContain("Ctrl");
   });
 
-  it("白板模式的设置齐全：默认模式 / 卡片宽度 / 层级 / 间距 / 连线 / 上限", () => {
-    for (const id of ["default-mode", "board-card-width", "board-max-depth", "board-gap", "board-connectors", "board-max-cards"]) {
-      expect(byId(id), "缺少设置项 " + id).toBeDefined();
+  it("白板模式的设置只剩「版面宽度」—— 卡片相关的设置项全部退场", () => {
+    expect(byId("board-width"), "缺少「白板版面宽度」设置").toBeDefined();
+    for (const gone of ["board-layout", "board-card-width", "board-max-depth", "board-gap", "board-connectors", "board-max-cards"]) {
+      expect(byId(gone), "卡片时代的设置项还在：" + gone).toBeUndefined();
+    }
+  });
+
+  it("设置项里没有卡片功能词汇（概念已移除；「没有卡片」这种否定说法不算）", () => {
+    const cardVocabulary = ["卡片宽度", "卡片间距", "卡片数量", "卡片展开", "卡片画布", "成卡", "每张卡", "卡片之间", "连线"];
+    for (const spec of ALL_SETTING_SPECS) {
+      const text = spec.zh + " " + (spec.zhDesc || "") + " " + (spec.aliases || []).join(" ");
+      for (const word of cardVocabulary) {
+        expect(text, spec.id + " 里还在用卡片词汇：" + word).not.toContain(word);
+      }
     }
   });
 

@@ -12,8 +12,6 @@
  * ========================================================================== */
 
 export type ReaderMode = "page" | "board";
-/** 白板排版：flow = 单栏纵向流（一张 A5 纸，上下滑着读）；tree = 分支树（横着看全局）。 */
-export type BoardLayoutMode = "flow" | "tree";
 export type ZoomButtonCorner = "top-left" | "top-right";
 
 export interface ZoomableReaderSettings {
@@ -28,7 +26,7 @@ export interface ZoomableReaderSettings {
   maxScale: number;
 
   /* --- 打开方式与版面 / Opening & page --- */
-  /** 打开笔记时默认用哪种模式：版面（整页）或白板（编译成卡片画布） */
+  /** 打开笔记时默认用哪种模式：版面（跟随主题行宽）或白板（一整张 1280px 宽版面） */
   defaultMode: ReaderMode;
   /** 顶部工具条 */
   showToolbar: boolean;
@@ -36,18 +34,8 @@ export interface ZoomableReaderSettings {
   padding: number;
 
   /* --- 白板模式 / Whiteboard mode --- */
-  /** 白板卡片宽度（px） */
-  boardCardWidth: number;
-  /** 卡片展开层级：超过这一层的标题折进上一张卡 */
-  boardMaxDepth: number;
-  /** 卡片间距（px）：兄弟卡之间，父子之间按 2.5 倍走线 */
-  boardGap: number;
-  /** 画父子连线 */
-  boardConnectors: boolean;
-  /** 卡片数量上限：超过就自动折得更深，保证手机上不卡 */
-  boardMaxCards: number;
-  /** 白板排版：单栏纵向流（默认）还是分支树 */
-  boardLayout: BoardLayoutMode;
+  /** 白板版面宽度（px）：整篇笔记渲染成【一张】这么宽的版面，没有卡片 */
+  boardWidth: number;
 
   /* --- 图片与图表查看器 / Image & diagram viewer --- */
   imageViewer: boolean;
@@ -66,10 +54,10 @@ export interface ZoomableReaderSettings {
   rememberPosition: boolean;
 }
 
-/* --------------------------------------------------------------- 纸张尺寸
- * 白板的卡片是一张「纸」：默认按 A5 走（148mm 宽），因为它最接近中文正文的舒适行长
- * （A5 宽 148mm 在 96dpi 下约 559~560px，15~16px 中文一行 35 字上下，正是书的行长）。
- * 换算按 CSS 的 96dpi：px = mm / 25.4 * 96。 */
+/* --------------------------------------------------------------- 版面宽度
+ * 白板版面宽度默认 1280px（网页版心宽：一行放得下长句，整篇往下滑着读）。
+ * 想按纸的感觉选也行 —— A5 宽 148mm 在 96dpi 下约 560px（一行 35 字上下，正是书的行长），
+ * A4 约 794px。换算按 CSS 的 96dpi：px = mm / 25.4 * 96。 */
 export const PAPER_WIDTHS_PX = { A6: 397, A5: 560, A4: 794 } as const;
 export type PaperName = keyof typeof PAPER_WIDTHS_PX;
 
@@ -97,7 +85,7 @@ export function widthPresetName(width: number, tolerance: number = 8): string | 
 }
 
 /** 设置页里滑块右侧的读数：「1280 px · 网页宽 Web」/「560 px · A5 · 148mm」。 */
-export function cardWidthLabel(width: number): string {
+export function widthLabel(width: number): string {
   const paper = paperNameFor(width);
   if (paper) return width + " px · " + paper + " · " + widthToMm(width) + "mm";
   const preset = widthPresetName(width);
@@ -115,16 +103,8 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   defaultMode: "page",
   showToolbar: true,
   padding: 16,
-  /* 默认 1280px = 网页版心宽度（桌面 Web 常见内容宽度）。
-   * 演进：320px（一行二十来个字，太窄）→ A5 560px（像纸，但手机上仍偏窄）→ 1280px。
-   * 用户实测反馈：「A5 宽度有点小，改成网页的宽度 1280px，这个符合上下滑动观看的体验」。 */
-  boardCardWidth: WEB_WIDTH_PX,
-  boardMaxDepth: 3,
-  boardGap: 32,
-  boardConnectors: true,
-  boardMaxCards: 120,
-  /* 默认单栏纵向流：白板是拿来【读】的 —— 往下滑就是往下读，不用横着找内容（手机尤其需要）。 */
-  boardLayout: "flow",
+  /* 默认 1280px = 网页版心宽度。白板模式就是【一整张 1280 宽的版面】，上下滑动着读。 */
+  boardWidth: WEB_WIDTH_PX,
   imageViewer: true,
   diagramViewer: true,
   lightboxFitOnOpen: true,
@@ -161,12 +141,12 @@ export interface SettingSpecBase {
 
 export interface SettingToggleSpec extends SettingSpecBase {
   control: "toggle";
-  key: "pinchZoom" | "showToolbar" | "boardConnectors" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
+  key: "pinchZoom" | "showToolbar" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
 }
 
 export interface SettingSliderSpec extends SettingSpecBase {
   control: "slider";
-  key: "pinchSensitivity" | "doubleTapZoom" | "maxScale" | "padding" | "boardCardWidth" | "boardMaxDepth" | "boardGap" | "boardMaxCards" | "diagramWrapWidth";
+  key: "pinchSensitivity" | "doubleTapZoom" | "maxScale" | "padding" | "boardWidth" | "diagramWrapWidth";
   min: number;
   max: number;
   step: number;
@@ -176,7 +156,7 @@ export interface SettingSliderSpec extends SettingSpecBase {
 
 export interface SettingDropdownSpec extends SettingSpecBase {
   control: "dropdown";
-  key: "defaultMode" | "zoomButtonCorner" | "boardLayout";
+  key: "defaultMode" | "zoomButtonCorner";
   options: Record<string, string>;
 }
 
@@ -224,7 +204,7 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
           { zh: "桌面 · Ctrl / ⌘ + 滚轮 = 以指针为中心缩放", en: "Desktop - Ctrl / Cmd + wheel = zoom at the pointer" },
           { zh: "桌面 · 滚轮 / 拖动 = 平移", en: "Desktop - wheel / drag = pan" },
           { zh: "键盘 · + − 0 = 放大 / 缩小 / 复位", en: "Keyboard - + - 0 = zoom in / out / reset" },
-          { zh: "白板 · 点卡片标题 = 放大到这张卡；点空白 + 拖动 = 平移全图", en: "Board - click a card title = zoom to that card; drag the background = pan the whole board" },
+          { zh: "白板 · 拖动 = 平移版面（往下滑就是往下读）；工具条「适配宽度」一键把版面铺满", en: "Board - drag = pan the page (scrolling down is reading down); the fit-width button fills the viewport with the page" },
         ],
       },
       {
@@ -289,11 +269,11 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
         control: "dropdown",
         id: "default-mode",
         key: "defaultMode",
-        options: { page: "版面（整页）/ Page", board: "白板（编译成卡片）/ Whiteboard" },
+        options: { page: "版面（跟随主题行宽）/ Page", board: "白板（1280px 宽版面）/ Whiteboard" },
         zh: "打开笔记时的默认模式",
         en: "Default mode when a note opens",
-        zhDesc: "白板模式会把 Markdown 编译成卡片画布：标题成卡、正文成块、大纲成连线，捏合放大后读细节。也可以在视图工具条上随时切换。",
-        enDesc: "Whiteboard compiles the Markdown into a card canvas: headings become cards, content becomes blocks, the outline becomes connectors. You can also switch from the view toolbar.",
+        zhDesc: "白板模式把整篇笔记渲染成一张 1280px 宽的版面（网页版心宽），放在可平移缩放的板子上，往下滑着读；没有卡片、没有分栏。也可以在视图工具条上随时切换。",
+        enDesc: "Whiteboard renders the whole note as one 1280 px page (a desktop web content width) on a pan-and-zoom surface, read by scrolling down: no cards, no columns. You can also switch from the view toolbar.",
         aliases: ["白板", "模式", "默认", "board", "whiteboard", "mode", "default", "canvas"],
       },
       {
@@ -325,88 +305,22 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
   {
     zh: "白板模式",
     en: "Whiteboard mode",
-    zhIntro: "白板模式把一篇 Markdown 编译成一张卡片画布：每个标题是一张卡，卡里是这一节的正文，卡片之间连出大纲。默认卡片按 A5 纸走（148mm），打开即原大；每次进白板都重新编译一遍，笔记改了白板跟着变（只读，不落盘）。",
-    enIntro: "Whiteboard compiles a note into a card canvas: every heading is a card holding that section's content, and connectors draw the outline. Cards default to A5 paper (148mm) and open at natural size; the board is recompiled every time you enter it and follows the note as you edit (read-only, nothing is written).",
+    zhIntro: "白板模式 = 把整篇笔记渲染成【一张】1280px 宽的版面（网页版心宽），放在可以平移、缩放、往下滑的板子上读；没有卡片、没有分栏。每次进白板都重新编译一遍，笔记改了白板跟着变（只读，不落盘）。",
+    enIntro: "Whiteboard renders the whole note as ONE 1280 px page (a desktop web content width) on a surface you can pan, zoom and scroll down: no cards, no columns. It is recompiled every time you enter it and follows the note as you edit (read-only, nothing is written).",
     items: [
       {
-        control: "dropdown",
-        id: "board-layout",
-        key: "boardLayout",
-        options: {
-          flow: "单栏纵向流（上下滑动读）/ Single column (scroll down)",
-          tree: "分支树（横向看全局）/ Branch tree (explore sideways)",
-        },
-        zh: "白板排版",
-        en: "Board layout",
-        zhDesc: "单栏纵向流：一张 A5 纸从上往下读，往下滑就是往下读（默认，手机推荐）。分支树：标题成列成卡、连线成大纲，一眼看全局但要横向找内容。",
-        enDesc: "Single column reads top to bottom like paper (default, best on a phone). Branch tree lays headings out in columns with connectors, showing the whole outline at a glance but requiring sideways panning.",
-        aliases: ["排版", "布局", "纵向", "单栏", "滑动", "滚动", "树", "layout", "column", "scroll", "vertical", "tree", "flow"],
-      },
-      {
         control: "slider",
-        id: "board-card-width",
-        key: "boardCardWidth",
-        min: 320,
-        max: 1600,
+        id: "board-width",
+        key: "boardWidth",
+        min: 480,
+        max: 1920,
         step: 20,
-        format: cardWidthLabel,
-        zh: "栏宽（卡片宽度）",
-        en: "Column width (card width)",
-        zhDesc: "默认 1280px = 网页版心宽度：一行放得下长句，配合上下滑动阅读最顺。想要纸的感觉可以调到 560（A5）或 794（A4），读数会显示毫米数；白板本身能捏合缩放，选自己顺眼的。",
-        enDesc: "Defaults to 1280 px, a desktop web content width: long lines, and it reads well when you simply scroll down. Pick 560 (A5) or 794 (A4) for a paper feel — the readout shows millimetres. The board zooms, so use what reads best.",
-        aliases: ["卡片", "宽度", "栏宽", "版心", "纸张", "尺寸", "网页", "A4", "A5", "A6", "card", "width", "column", "paper", "size", "web", "board"],
-      },
-      {
-        control: "slider",
-        id: "board-max-depth",
-        key: "boardMaxDepth",
-        min: 1,
-        max: 6,
-        step: 1,
-        format: (v) => "H" + v,
-        zh: "卡片展开层级",
-        en: "Outline depth",
-        zhDesc: "超过这一层的标题不单独成卡，而是作为小节折进上一张卡 —— 中文笔记常写到四五级标题，逐级成列会把白板拉得太宽。",
-        enDesc: "Headings deeper than this fold into the ancestor card as a section, so a four-level note does not stretch the board into a thin ribbon.",
-        aliases: ["层级", "深度", "大纲", "折叠", "depth", "heading", "outline", "fold"],
-      },
-      {
-        control: "slider",
-        id: "board-gap",
-        key: "boardGap",
-        min: 12,
-        max: 80,
-        step: 4,
-        format: (v) => v + " px",
-        zh: "卡片间距",
-        en: "Card spacing",
-        zhDesc: "兄弟卡片之间的垂直间距；父子之间按它的 2.5 倍留出走线的位置。",
-        enDesc: "Vertical gap between sibling cards; parent-to-child spacing is 2.5x that, leaving room for the connectors.",
-        aliases: ["间距", "间隔", "gap", "spacing"],
-      },
-      {
-        control: "toggle",
-        id: "board-connectors",
-        key: "boardConnectors",
-        zh: "显示连线",
-        en: "Show connectors",
-        zhDesc: "分支树排版下画出父卡到子卡的连线（单栏纵向流靠缩进与左侧色条表达层级，不画线）。",
-        enDesc: "In branch-tree layout, draws curved connectors from a parent card to its children. The single-column layout shows hierarchy with indentation instead.",
-        aliases: ["连线", "连接", "线", "connector", "edge", "line"],
-      },
-      {
-        control: "slider",
-        id: "board-max-cards",
-        key: "boardMaxCards",
-        min: 20,
-        max: 400,
-        step: 20,
-        format: (v) => v + " 张",
-        zh: "卡片数量上限",
-        en: "Card limit",
-        zhDesc: "超过这个数量就自动折得更深（保证手机上不卡）。一篇几百个标题的长文档靠它保住手感。",
-        enDesc: "Above this count the board folds deeper automatically, so a note with hundreds of headings stays responsive on a phone.",
-        aliases: ["数量", "上限", "性能", "card", "limit", "performance"],
+        format: widthLabel,
+        zh: "白板版面宽度",
+        en: "Whiteboard page width",
+        zhDesc: "默认 1280px（网页版心宽）：一行放得下长句，整篇往下滑着读。想要纸的感觉可以调到 560（A5）或 794（A4），读数会显示毫米数；版面本身能捏合缩放，选自己顺眼的。",
+        enDesc: "Defaults to 1280 px, a desktop web content width: long lines, one page you scroll down. Pick 560 (A5) or 794 (A4) for a paper feel — the readout shows millimetres. The page zooms, so use what reads best.",
+        aliases: ["白板", "版面", "宽度", "版心", "网页", "纸张", "尺寸", "A4", "A5", "board", "page", "width", "web", "paper", "size"],
       },
     ],
   },

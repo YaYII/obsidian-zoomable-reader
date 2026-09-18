@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.5
+
+- **The card concept is gone.** Whiteboard mode used to compile the note into a board of cards:
+  one card per heading, connectors, folding, a card limit, and a column *or* flow layout. It is now
+  what it should have been: **one page, 1280 px wide**, on a surface you pan, zoom and scroll. The
+  width setting belongs to the page, not to a card.
+- Removed along with it: `src/board-model.ts` (the heading→card compiler), `src/board-layout.ts`
+  (tidy tree / single-column geometry), `src/board-render.ts` (card DOM, connectors, focus
+  buttons), the five card settings (排版 / 展开层级 / 间距 / 连线 / 数量上限), every card style in
+  `styles.css`, and the 43 unit tests that covered them. The verification suite now **asserts the
+  absence**: no card class names or card settings in the built bundle, no card modules in the tree,
+  and zero card artifacts in the live DOM.
+- What is left is the part that made the plugin worth having: one page whose width is a setting
+  (1280 px default, A5/A4 presets one slider step away), recompiled every time you enter the mode and
+  following the note as you edit, with the same gesture layer as before — drag to pan, pinch to zoom,
+  **适配宽度** to pull the whole page into the viewport and then simply scroll down.
+- Settings are now: 打开笔记时的默认模式 / default mode and 白板版面宽度 / whiteboard page width.
+
+Verification: `npm run verify:board` (34 assertions) now checks the whiteboard itself — the page
+is 1280 px by default (from the shipped settings data), the page mode follows the theme line width
+(760 px), changing the width setting really changes the page, one page element exists, the bundle and
+the DOM contain **no** card artifacts, wheels scroll to the last paragraph, fit-width puts the whole
+page inside the viewport, and the mobile touch gestures keep their anchor invariant.
+
 ## 1.3.4
 
 - **The column is 1280 px by default — a desktop web content width.** A5 (560 px) turned out to be

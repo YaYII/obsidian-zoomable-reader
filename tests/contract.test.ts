@@ -66,9 +66,6 @@ describe("仓库文件与披露", () => {
       "src/settings.ts",
       "src/settings-spec.ts",
       "src/defaults.ts",
-      "src/board-model.ts",
-      "src/board-layout.ts",
-      "src/board-render.ts",
     ];
     for (const file of files) {
       const source = fs.readFileSync(path.join(ROOT, file), "utf8");
