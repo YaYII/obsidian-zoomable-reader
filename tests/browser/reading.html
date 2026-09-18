@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Zoomable Reader · 阅读视图宽度与缩放验证台</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, "Noto Sans CJK SC", sans-serif; background: #eceff1; }
+  /* 模拟 Obsidian 的阅读视图：主题把版心宽写在 --file-line-width 上（这里 720px） */
+  .markdown-reading-view {
+    --file-line-width: 720px;
+    --line-width: 720px;
+    height: 100%;
+    overflow: auto;
+    background: #fff;
+  }
+  .markdown-preview-view { padding: 24px; }
+  .markdown-preview-sizer { margin: 0 auto; max-width: var(--file-line-width); }
+  .markdown-preview-sizer p { font-size: 16px; line-height: 1.7; margin: 0 0 12px; }
+  #outside { position: fixed; right: 0; bottom: 0; width: 120px; height: 80px; background: #dfe6ee; }
+</style>
+</head>
+<body>
+<div class="markdown-reading-view" id="reading">
+  <div class="markdown-preview-view">
+    <div class="markdown-preview-sizer" id="sizer"></div>
+  </div>
+</div>
+<div id="outside"></div>
+<script src="out/zoom-pan.js"></script>
+<script>
+/* 造一篇够长的正文：缩放会重排，段落多才看得出「字变大、版心不变」 */
+(function () {
+  var sizer = document.getElementById("sizer");
+  var html = "<h1>阅读视图宽度与缩放</h1>";
+  for (var i = 1; i <= 24; i += 1) {
+    html += "<p>第 " + i + " 段：阅读视图能不能改宽度、能不能缩放，读代码看不出来 —— " +
+      "要看真实排版：版心宽度、字号渲染大小、以及滚动高度。</p>";
+  }
+  sizer.innerHTML = html;
+})();
+
+var styleHandle = null;
+var detachGestures = null;
+var zoomEvents = [];
+
+function installStyle(options) {
+  if (styleHandle) styleHandle.destroy();
+  styleHandle = window.ReadingView.installStyle(document, options);
+  return styleHandle;
+}
+
+function installGestures(options) {
+  if (detachGestures) { detachGestures(); detachGestures = null; }
+  zoomEvents = [];
+  detachGestures = window.ReadingView.installGestures(document, Object.assign({
+    getZoom: function () { return currentZoom; },
+    onZoom: function (z) { currentZoom = z; zoomEvents.push(z); applyZoomStyle(z); },
+    throttleMs: 80,
+  }, options || {}));
+  return function () { if (detachGestures) { detachGestures(); detachGestures = null; } };
+}
+
+var currentZoom = 1;
+function applyZoomStyle(z) {
+  installStyle({ lineWidth: window.harness.lineWidth(), zoom: z, gestures: true });
+}
+
+window.harness = {
+  lineWidth: function () { return window.__lineWidth === undefined ? 900 : window.__lineWidth; },
+  setLineWidth: function (w) { window.__lineWidth = w; installStyle({ lineWidth: w, zoom: currentZoom, gestures: true }); },
+  setOptions: function (options) {
+    if (options.lineWidth !== undefined) window.__lineWidth = options.lineWidth;
+    if (options.zoom !== undefined) currentZoom = options.zoom;
+    installStyle({ lineWidth: window.harness.lineWidth(), zoom: currentZoom, gestures: true });
+    return window.harness.state();
+  },
+  installGestures: installGestures,
+  detachGestures: function () { if (detachGestures) { detachGestures(); detachGestures = null; } },
+  zoom: function () { return currentZoom; },
+  zoomEvents: function () { return zoomEvents.slice(); },
+  clearEvents: function () { zoomEvents = []; },
+  state: function () {
+    return {
+      zoom: currentZoom,
+      styleText: (document.getElementById(window.ReadingView.styleId) || {}).textContent || "",
+      hasStyle: !!document.getElementById(window.ReadingView.styleId),
+    };
+  },
+  /** sizer 的渲染矩形（zoom 会体现在这里：宽 = max-width × zoom） */
+  sizerBox: function () {
+    var r = document.getElementById("sizer").getBoundingClientRect();
+    return { width: r.width, height: r.height, left: r.left, top: r.top };
+  },
+  /** 第一段的渲染高度：用来看「字是不是真的变大了」 */
+  paragraphBox: function () {
+    var p = document.querySelector("#sizer p");
+    var r = p.getBoundingClientRect();
+    return { width: r.width, height: r.height };
+  },
+  fontPx: function () { return parseFloat(getComputedStyle(document.querySelector("#sizer p")).fontSize); },
+  clampZoom: function (z) { return window.ReadingView.clampZoom(z); },
+  outsideRect: function () {
+    var r = document.getElementById("outside").getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  },
+  rect: function () {
+    var r = document.getElementById("reading").getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  },
+};
+</script>
+</body>
+</html>

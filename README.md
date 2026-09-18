@@ -13,6 +13,11 @@ columns, just a wide sheet of paper you read downwards.
 
 ## 中文速览
 
+- **阅读视图（Obsidian 自带的页面）也能改宽度、也能缩放**：默认把版心放宽到 **900px**，
+  字号缩放默认 100%（60%~200% 可调）。**手机上在阅读视图里双指捏合、桌面按 Ctrl+滚轮**
+  就能自己调；命令面板还有「阅读视图放大 / 缩小 / 复位到 100%」。只看两条注入样式，
+  你的主题文件一个字节都不动；缩放是**重排**（字变大、版心宽度不变），不是把整页拉变形。
+
 - **白板模式**：把整篇笔记渲染成**一张 1280px 宽的版面**（网页版心宽），放在可平移、缩放、
   往下滑的板子上 —— **没有卡片、没有分栏**，往下滑就是往下读。宽度可调（设置 → 白板模式 →
   白板版面宽度；想按纸的感觉就选 560 = A5、794 = A4）。**每次进白板都重新编译一遍**，
@@ -91,6 +96,29 @@ Notes:
 Whiteboard settings: **打开笔记时的默认模式 / default mode**, **白板版面宽度 / whiteboard page
 width** (480–1920 px, default 1280 px).
 
+## Reading view: line width and zoom
+
+The reading view is Obsidian's own page, so the plugin does not take it over — it changes **two CSS
+properties** of it and leaves your theme files untouched:
+
+- **Line width** (default **900 px**, options 760–1200 px or 跟随主题 / follow the theme). The
+  plugin sets `--file-line-width` / `--line-width` on `.markdown-reading-view` and adds a
+  `max-width` fallback on the sizer, so it works with themes that hard-code the width. Choose
+  *follow the theme* and nothing at all is injected.
+- **Zoom** (60 %–200 %, default 100 %). Applied as CSS `zoom`, which **reflows**: the text grows
+  while the measure stays exactly the line width you chose (the sizer width is divided by the zoom
+  factor). It is not a transform, so nothing stretches or overflows sideways.
+- **Gestures**: pinch inside the reading view on mobile, or **Ctrl / ⌘ + wheel** on desktop. Only
+  two-finger pinches and Ctrl+wheel are intercepted — one-finger scrolling, taps and the plain wheel
+  stay with Obsidian. Pinches outside the reading view are ignored, and switching the gesture setting
+  off removes the listener entirely.
+- **Commands**: 阅读视图放大 / 阅读视图缩小 / 阅读视图复位到 100% — bind them to hotkeys if you
+  prefer buttons. Each shows the new level in a notice.
+
+> Why this works where the WebView does not: the app-level pinch zoom is a native switch we cannot
+> reach, but the *page's own* CSS is ours — and CSS `zoom` reflows content instead of scaling a
+> bitmap, which is what you want for text.
+
 ## Privacy and disclosures
 
 - **No network access.** This plugin makes no HTTP requests and loads no remote assets.
@@ -110,6 +138,9 @@ Obsidian 1.13+ **settings search** — typing 双指 or pinch jumps straight to 
 | 捏合灵敏度 / Pinch sensitivity | 1x | 1x doubles the zoom when the finger distance doubles |
 | 双击放大倍数 / Double-tap zoom | 2x | How far a double-click or double-tap zooms in |
 | 最大放大倍数 / Maximum zoom | 64x | Upper limit for pinch and wheel zoom |
+| 阅读视图版心宽度 / Reading view line width | 900 px | Obsidian's own reading view; 跟随主题 injects nothing |
+| 阅读视图缩放 / Reading view zoom | 100% | Reflows (text grows, line width unchanged); pinch or Ctrl+wheel |
+| 阅读视图手势缩放 / Reading view zoom gestures | on | Pinch inside the reading view / Ctrl+wheel; the plain wheel and one-finger scroll are untouched |
 | 打开笔记时的默认模式 / Default mode | 版面 page | 版面 page (theme line width) or 白板 whiteboard (1280 px page) |
 | 显示工具条 / Show toolbar | on | Zoom buttons, zoom level, fit width, mode switch |
 | 版心四周留白 / Page padding | 16 px | Gap between the page and the edge of the view |
@@ -188,6 +219,7 @@ npm run typecheck       # tsc --noEmit
 npm test                # vitest: zoom math, settings contract
 npm run verify:gestures # real Chromium: wheel, Ctrl+wheel, drag, pinch, double-tap, button corner
 npm run verify:board    # real Chromium: whiteboard width, gesture invariants, no-card regression
+npm run verify:reading  # real Chromium: reading view line width, reflow zoom, pinch/Ctrl+wheel
 npm run build           # production bundle
 npm run check           # everything above, in order
 ```

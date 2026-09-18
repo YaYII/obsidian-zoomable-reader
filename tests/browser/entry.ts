@@ -3,7 +3,16 @@
 import { ZoomPanLayer, formatPercent, fitRect, BOARD_MIN_SCALE } from "../../src/zoom-pan";
 import { ImageLightbox, installZoomAffordance } from "../../src/lightbox";
 import { DEFAULT_DIAGRAM_LAYOUT, applyDiagramLayout, mergeDiagramConfig } from "../../src/diagram-layout";
-import { DEFAULT_SETTINGS, PAPER_WIDTHS_PX, WEB_WIDTH_PX, paperNameFor, widthLabel, widthToMm } from "../../src/settings-spec";
+import { DEFAULT_SETTINGS, PAPER_WIDTHS_PX, WEB_WIDTH_PX, paperNameFor, readingLineWidth, widthLabel, widthToMm } from "../../src/settings-spec";
+import {
+  READING_ZOOM_MAX,
+  READING_ZOOM_MIN,
+  STYLE_ELEMENT_ID,
+  clampReadingZoom,
+  installReadingGestures,
+  installReadingStyle,
+  readingCss,
+} from "../../src/reading-view";
 
 declare global {
   interface Window {
@@ -17,6 +26,16 @@ declare global {
       defaults: typeof DEFAULT_DIAGRAM_LAYOUT;
     };
     ZoomableReaderDefaults: typeof DEFAULT_SETTINGS;
+    ReadingView: {
+      css: typeof readingCss;
+      installStyle: typeof installReadingStyle;
+      installGestures: typeof installReadingGestures;
+      clampZoom: typeof clampReadingZoom;
+      lineWidth: typeof readingLineWidth;
+      styleId: string;
+      zoomMin: number;
+      zoomMax: number;
+    };
     Width: {
       web: number;
       papers: typeof PAPER_WIDTHS_PX;
@@ -33,4 +52,14 @@ window.ImageLightbox = ImageLightbox;
 window.installZoomAffordance = installZoomAffordance;
 window.DiagramLayout = { apply: applyDiagramLayout, merge: mergeDiagramConfig, defaults: DEFAULT_DIAGRAM_LAYOUT };
 window.ZoomableReaderDefaults = DEFAULT_SETTINGS;
+window.ReadingView = {
+  css: readingCss,
+  installStyle: installReadingStyle,
+  installGestures: installReadingGestures,
+  clampZoom: clampReadingZoom,
+  lineWidth: readingLineWidth,
+  styleId: STYLE_ELEMENT_ID,
+  zoomMin: READING_ZOOM_MIN,
+  zoomMax: READING_ZOOM_MAX,
+};
 window.Width = { web: WEB_WIDTH_PX, papers: PAPER_WIDTHS_PX, nameFor: paperNameFor, toMm: widthToMm, label: widthLabel };

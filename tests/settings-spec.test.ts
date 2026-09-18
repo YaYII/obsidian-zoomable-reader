@@ -86,6 +86,9 @@ describe("设置页的双语契约", () => {
       if (spec.control !== "dropdown") continue;
       expect(Object.keys(spec.options)).toContain(String(DEFAULT_SETTINGS[spec.key]));
       for (const label of Object.values(spec.options)) {
+        /* 纯数值项（"760 px"）天然没有语言之分，只要求「非数值项必须中英对照」 */
+        const neutral = /^[0-9][0-9\s.a-zA-Z%]*$/.test(label);
+        if (neutral) continue;
         expect(label, spec.id + " 的选项文案必须中英对照").toMatch(HAN);
         expect(label, spec.id + " 的选项文案必须中英对照").toMatch(LATIN);
       }

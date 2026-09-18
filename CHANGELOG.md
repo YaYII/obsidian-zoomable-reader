@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.3.6
+
+- **The reading view itself now has a width and a zoom.** Obsidian's own reading view is not taken
+  over — the plugin changes two CSS properties of it: the line width (default **900 px**, the value
+  that was asked for, with 760–1200 px and 跟随主题 / follow-the-theme options) and a zoom level
+  (60 %–200 %, default 100 %). Your theme files are untouched, and *follow the theme* + 100 % injects
+  nothing beyond one \`touch-action\` line.
+- **Zoom reflows instead of stretching.** It is applied as CSS \`zoom\` with the sizer's \`max-width\`
+  divided by the same factor, so the text gets bigger while the measure on screen stays exactly the
+  line width you picked. A screenshot-level stretch would have changed the line length; this does
+  not.
+- **You operate it: pinch, Ctrl+wheel, or commands.** Pinch inside the reading view on mobile,
+  **Ctrl / ⌘ + wheel** on desktop, or the three new commands (阅读视图放大 / 缩小 / 复位到 100 %,
+  each showing the new level). Only two-finger pinches and Ctrl+wheel are intercepted — one-finger
+  scrolling, taps and the plain wheel remain Obsidian's.
+- **A real bug found by the browser harness.** The first implementation listened for pointer events
+  and the browser claimed the two-finger gesture for itself: of ten gesture frames only two arrived
+  (pointercancel). The fix is to listen for \`touchstart\`/\`touchmove\` and to declare
+  \`touch-action: pan-y\` on the reading view — vertical one-finger scrolling still belongs to
+  Obsidian, while the two-finger pinch now belongs to the plugin (measured: zoom 1 → 1.86 in one
+  pinch).
+- New settings group 阅读视图（Obsidian 自带的页面）/ Reading view, with the three settings above.
+
+Verification: `npm run verify:reading` — 17 assertions in a real Chromium against a page that
+mimics the reading view (a theme width of 720 px, a long document): follow-the-theme really is
+720 px with no width rules injected, 900 px really measures 900 px, zoom 150 % keeps the on-screen
+measure at 900 px while paragraphs get 1.5x taller, the clamp holds at 60–200 %, Ctrl+wheel zooms
+inside the reading view and is ignored outside it (and after the listener is removed), and on a phone
+viewport a real CDP two-finger pinch raises the zoom while the throttling keeps the reflow count
+below the frame count.
+
 ## 1.3.5
 
 - **The card concept is gone.** Whiteboard mode used to compile the note into a board of cards:

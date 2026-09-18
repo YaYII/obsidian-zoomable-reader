@@ -2,8 +2,15 @@ import { Menu, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./src/defaults";
 import { DEFAULT_DIAGRAM_LAYOUT, DiagramLayout, MermaidGlobal, applyDiagramLayout } from "./src/diagram-layout";
 import { ImageLightbox, installZoomAffordance } from "./src/lightbox";
+import {
+  READING_ZOOM_STEP,
+  clampReadingZoom,
+  installReadingGestures,
+  installReadingStyle,
+  type ReadingViewOptions,
+} from "./src/reading-view";
 import { ZoomableReaderSettingTab, ZoomableReaderSettings } from "./src/settings";
-import type { ReaderMode, ZoomButtonCorner } from "./src/settings-spec";
+import { readingLineWidth, type ReaderMode, type ZoomButtonCorner } from "./src/settings-spec";
 import { BOARD_MIN_SCALE, MIN_SCALE, Transform, normalizeTransform } from "./src/zoom-pan";
 
 /** 存下来的变换，外加「当时用的白板版面宽度」：版面宽度变了，旧位置就不适用了
@@ -24,6 +31,8 @@ export default class ZoomableReaderPlugin extends Plugin {
   private saveTimer: number | null = null;
   private lightbox: ImageLightbox | null = null;
   private detachAffordance: (() => void) | null = null;
+  private readingStyle: { update: (next: ReadingViewOptions) => void; destroy: () => void } | null = null;
+  private detachReadingGestures: (() => void) | null = null;
 
   async onload(): Promise<void> {
     await this.loadPersisted();
@@ -81,9 +90,93 @@ export default class ZoomableReaderPlugin extends Plugin {
       })
     );
 
+    this.addCommand({
+      id: "reading-zoom-in",
+      name: "阅读视图放大 / reading view: zoom in",
+      callback: () => this.zoomReadingView(1),
+    });
+
+    this.addCommand({
+      id: "reading-zoom-out",
+      name: "阅读视图缩小 / reading view: zoom out",
+      callback: () => this.zoomReadingView(-1),
+    });
+
+    this.addCommand({
+      id: "reading-zoom-reset",
+      name: "阅读视图复位到 100% / reading view: reset zoom",
+      callback: () => this.resetReadingZoom(),
+    });
+
     this.addSettingTab(new ZoomableReaderSettingTab(this.app, this));
     this.registerLightbox();
     this.registerDiagramLayout();
+    this.syncReadingView();
+  }
+
+  /* --------------------------------------------------- 阅读视图（Obsidian 自带的页面）
+
+  /**
+   * 阅读视图的样式与手势。
+   *
+   * 只注入样式，不接管页面：宽度改的是 Obsidian 与主题都读的 --file-line-width，
+   * 缩放用的是 CSS zoom（会重排，字变大而行宽不变）；手势只在「阅读视图里 + 双指/Ctrl 滚轮」
+   * 时才插手，单指滚动与单击一律留给 Obsidian 自己。
+   */
+  private syncReadingView(): void {
+    const doc = this.app.workspace.containerEl.ownerDocument;
+    const options = this.readingOptions();
+
+    if (!this.readingStyle) {
+      const handle = installReadingStyle(doc, options);
+      this.readingStyle = handle;
+      this.register(() => handle.destroy());
+    } else {
+      this.readingStyle.update(options);
+    }
+
+    if (this.settings.readingGestures) {
+      if (!this.detachReadingGestures) {
+        const detach = installReadingGestures(doc, {
+          getZoom: () => clampReadingZoom(this.settings.readingZoom / 100),
+          onZoom: (zoom) => this.setReadingZoom(zoom * 100),
+        });
+        this.detachReadingGestures = detach;
+        this.register(detach);
+      }
+    } else if (this.detachReadingGestures) {
+      this.detachReadingGestures();
+      this.detachReadingGestures = null;
+    }
+  }
+
+  private readingOptions(): ReadingViewOptions {
+    return {
+      lineWidth: readingLineWidth(this.settings.readingWidth),
+      zoom: this.settings.readingZoom / 100,
+      gestures: this.settings.readingGestures,
+    };
+  }
+
+  /** 改阅读视图缩放：立刻生效 + 落盘（不动笔记，也不动主题文件）。 */
+  setReadingZoom(percent: number): void {
+    const next = Math.round(clampReadingZoom(percent / 100) * 100);
+    if (next === this.settings.readingZoom) return;
+    this.settings.readingZoom = next;
+    if (this.readingStyle) this.readingStyle.update(this.readingOptions());
+    void this.saveSettings();
+  }
+
+  /** 命令：阅读视图放大 / 缩小（一次 10%），并给一句反馈。 */
+  zoomReadingView(direction: number): void {
+    const step = Math.round(READING_ZOOM_STEP * 100) * 2;
+    this.setReadingZoom(this.settings.readingZoom + direction * step);
+    new Notice("阅读视图缩放 / reading zoom: " + this.settings.readingZoom + "%");
+  }
+
+  resetReadingZoom(): void {
+    this.setReadingZoom(100);
+    new Notice("阅读视图缩放 / reading zoom: 100%");
   }
 
   /**
@@ -242,6 +335,7 @@ export default class ZoomableReaderPlugin extends Plugin {
    *   ③ 其余：交给视图自己判断（手势参数只重建手势层，白板排版才重排内容）。
    */
   applySettingChange(key: keyof ZoomableReaderSettings): void {
+    if (key === "readingWidth" || key === "readingZoom" || key === "readingGestures") this.syncReadingView();
     if (key === "diagramLayout" || key === "diagramWrapWidth") this.applyDiagramLayoutNow();
     if (
       key === "zoomButtonCorner" ||

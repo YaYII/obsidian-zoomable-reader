@@ -12,6 +12,16 @@
  * ========================================================================== */
 
 export type ReaderMode = "page" | "board";
+
+/** 阅读视图（Obsidian 自带的那个）的版心宽度：跟随主题，或固定一个像素值。 */
+export type ReadingWidth = "theme" | "760" | "800" | "900" | "1000" | "1100" | "1200";
+
+/** 把设置里的宽度取值换算成样式层要的数字（"theme" → 跟随主题）。 */
+export function readingLineWidth(value: ReadingWidth): number | "theme" {
+  if (value === "theme") return "theme";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : "theme";
+}
 export type ZoomButtonCorner = "top-left" | "top-right";
 
 export interface ZoomableReaderSettings {
@@ -24,6 +34,14 @@ export interface ZoomableReaderSettings {
   doubleTapZoom: number;
   /** 最大放大倍数 */
   maxScale: number;
+
+  /* --- 阅读视图 / Reading view（Obsidian 自带的那个页面） --- */
+  /** 阅读视图版心宽度：跟随主题，或固定值（用户要求 900） */
+  readingWidth: ReadingWidth;
+  /** 阅读视图缩放（%）：100 = 原样，只看字号与内容大小，版心宽度不变 */
+  readingZoom: number;
+  /** 阅读视图手势缩放：手机双指捏合 / 桌面 Ctrl+滚轮 */
+  readingGestures: boolean;
 
   /* --- 打开方式与版面 / Opening & page --- */
   /** 打开笔记时默认用哪种模式：版面（跟随主题行宽）或白板（一整张 1280px 宽版面） */
@@ -100,6 +118,11 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   /* 默认放宽到 64 倍：看 4K 截图里的小字时，8 倍常常不够。
    * 上限只是防呆，不是设计意图 —— 需要时可在设置里调到 256。 */
   maxScale: 64,
+  /* 阅读视图（不是本插件的视图）：默认把版心放宽到 900px —— 用户明确要求「把阅读视图
+   * 的页面改为 900 的宽度，放大缩小我自己操作就可以了」。想完全交给主题就选「跟随主题」。 */
+  readingWidth: "900",
+  readingZoom: 100,
+  readingGestures: true,
   defaultMode: "page",
   showToolbar: true,
   padding: 16,
@@ -141,12 +164,12 @@ export interface SettingSpecBase {
 
 export interface SettingToggleSpec extends SettingSpecBase {
   control: "toggle";
-  key: "pinchZoom" | "showToolbar" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
+  key: "readingGestures" | "pinchZoom" | "showToolbar" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
 }
 
 export interface SettingSliderSpec extends SettingSpecBase {
   control: "slider";
-  key: "pinchSensitivity" | "doubleTapZoom" | "maxScale" | "padding" | "boardWidth" | "diagramWrapWidth";
+  key: "readingZoom" | "pinchSensitivity" | "doubleTapZoom" | "maxScale" | "padding" | "boardWidth" | "diagramWrapWidth";
   min: number;
   max: number;
   step: number;
@@ -156,7 +179,7 @@ export interface SettingSliderSpec extends SettingSpecBase {
 
 export interface SettingDropdownSpec extends SettingSpecBase {
   control: "dropdown";
-  key: "defaultMode" | "zoomButtonCorner";
+  key: "readingWidth" | "defaultMode" | "zoomButtonCorner";
   options: Record<string, string>;
 }
 
@@ -258,6 +281,57 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
         zhDesc: "捏合与滚轮的上限。设大一点没坏处 —— 这个上限只是防呆，避免误触后找不到自己在哪里。",
         enDesc: "Upper limit for pinch and wheel zoom. High values are fine; the cap only exists so a stray gesture cannot lose your place.",
         aliases: ["最大", "上限", "放大", "max", "limit", "zoom"],
+      },
+    ],
+  },
+  {
+    zh: "阅读视图（Obsidian 自带的页面）",
+    en: "Reading view (Obsidian's own page)",
+    zhIntro: "这里改的是 Obsidian 自带阅读视图的版心宽度与缩放：只注入两条样式，不动你的主题文件。缩放会【重排】（字变大、行宽不变），不是把整页拉变形。手机在阅读视图里双指捏合、桌面按 Ctrl+滚轮即可自己调，命令面板还有放大/缩小/复位。",
+    enIntro: "These change Obsidian's own reading view: its line width and its zoom. Only two CSS rules are injected — your theme files are untouched. Zoom reflows (bigger text, same measure) instead of stretching the page. Pinch inside the reading view on mobile, Ctrl+wheel on desktop, or use the zoom commands.",
+    items: [
+      {
+        control: "dropdown",
+        id: "reading-width",
+        key: "readingWidth",
+        options: {
+          theme: "跟随主题 / Follow the theme",
+          "760": "760 px",
+          "800": "800 px",
+          "900": "900 px（默认 / default）",
+          "1000": "1000 px",
+          "1100": "1100 px",
+          "1200": "1200 px",
+        },
+        zh: "阅读视图版心宽度",
+        en: "Reading view line width",
+        zhDesc: "默认 900px：比多数主题的 700~760 更宽，一行放得下长句。选「跟随主题」则完全不注入宽度规则。",
+        enDesc: "Defaults to 900 px, wider than the 700–760 px most themes use, so long lines fit. Pick Follow the theme to inject nothing at all.",
+        aliases: ["阅读视图", "宽度", "版心", "行宽", "页面", "reading", "view", "width", "line", "page"],
+      },
+      {
+        control: "slider",
+        id: "reading-zoom",
+        key: "readingZoom",
+        min: 60,
+        max: 200,
+        step: 5,
+        format: (v) => v + "%",
+        zh: "阅读视图缩放",
+        en: "Reading view zoom",
+        zhDesc: "100% = 原样。放大后字变大、版心宽度不变（会自动重排）；手机双指捏合、桌面 Ctrl+滚轮也能直接改。",
+        enDesc: "100% is untouched. Above that the text grows while the measure stays the same (the page reflows). Pinch on mobile or Ctrl+wheel on desktop to change it live.",
+        aliases: ["阅读视图", "缩放", "放大", "缩小", "字号", "reading", "zoom", "scale", "font"],
+      },
+      {
+        control: "toggle",
+        id: "reading-gestures",
+        key: "readingGestures",
+        zh: "阅读视图手势缩放",
+        en: "Reading view zoom gestures",
+        zhDesc: "手机在阅读视图里双指捏合、桌面按 Ctrl+滚轮即可缩放（单指滚动、单击、普通滚轮不受影响）。",
+        enDesc: "Pinch inside the reading view on mobile, Ctrl+wheel on desktop (one-finger scrolling, taps and plain wheel are left alone).",
+        aliases: ["手势", "双指", "捏合", "滚轮", "缩放", "gesture", "pinch", "wheel", "zoom"],
       },
     ],
   },
