@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.3.8
+
+- **Fixed: double tapping still opened the editor.** 1.3.7 only intercepted double taps **on images**,
+  but Obsidian's double-tap-to-edit is a gesture of the **whole reading view** — tapping text
+  triggers it too, so in practice nothing changed. The interception now covers every double tap
+  inside the reading view (text, images, diagrams); double tapping an image or diagram opens the
+  zoomable viewer instead. Two separate switches: 手机：双击不进编辑 and 手机：双击图片 = 放大查看.
+- **Three more real bugs, all found by the browser harness rather than by reading the code:**
+  - The same event was handled **twice** (the module listens on both ```window``` and ```document``` in
+    the capture phase), so one tap looked like two and a single tap opened the viewer. Events are now
+    deduplicated.
+  - A **two-finger pinch was counted as a tap**, poisoning the next double tap. Multi-touch now
+    cancels tap tracking, and only ```touchend``` counts as a tap (```pointerup```/```click``` are used for
+    swallowing only).
+  - Within one gesture, ```touchstart``` targets the image but **```touchend``` and the synthetic
+    ```dblclick``` target the container**, so the hit test concluded "text" and the image never zoomed.
+    The hit is now resolved from the touch-start element **and** the coordinates as a fallback.
+- A touch double tap also produces a synthetic ```dblclick``` (in an unstable order) and both used to
+  open the viewer; they now share a short window so one double tap opens exactly once.
+- **手机：双击自检** (off by default) shows a notice for every intercepted double tap — if a gesture
+  still misbehaves on a real phone, the notice tells whether the plugin saw it at all.
+
+Verification: `npm run verify:reading` — **28 assertions**. Besides the earlier reading-view
+checks: a single tap does nothing, a double tap on text does **not** enter editing and opens nothing,
+a double tap on an image opens the viewer exactly once and the simulated editor handler records
+**zero** events, gestures outside the reading view are ignored, and `mobile: false` (desktop) does
+not intercept at all.
+
 ## 1.3.7
 
 - **Images follow the line width, scaled by ratio.** In the reading view every image is now scaled to

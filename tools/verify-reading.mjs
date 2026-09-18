@@ -287,6 +287,31 @@ try {
   );
   assert(doubleTap.edits === 0, "手机双击图片【不会】进入编辑模式（事件被吃掉，模拟的编辑处理器 0 次）", "编辑触发 " + doubleTap.edits + " 次");
 
+  /* ⑩ 关键：双击【正文】（不是图片）也不该进编辑 —— 用户实测反馈的就是这一条 */
+  await mpage.evaluate(() => {
+    window.harness.installMobileGestures({ mobile: true, blockDoubleTapEdit: true });
+  });
+  const paragraphPoint = await mpage.evaluate(() => {
+    const p = document.querySelector("#sizer p");
+    const r = p.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await tap(mrect.left + paragraphPoint.x, mrect.top + paragraphPoint.y);
+  await mpage.waitForTimeout(60);
+  await tap(mrect.left + paragraphPoint.x, mrect.top + paragraphPoint.y);
+  await mpage.waitForTimeout(220);
+  const textDoubleTap = await mpage.evaluate(() => ({
+    hits: window.harness.gestureLog(),
+    opens: window.harness.openLog().length,
+    edits: window.harness.editCount(),
+  }));
+  assert(
+    textDoubleTap.edits === 0,
+    "手机双击【正文】不会进入编辑（用户实测反馈的那一条：编辑只能走菜单按钮）",
+    "编辑触发 " + textDoubleTap.edits + " 次 · 命中 " + (textDoubleTap.hits[0] ? textDoubleTap.hits[0].kind : "无")
+  );
+  assert(textDoubleTap.opens === 0, "双击正文不打开查看器（只有图片/图表才打开）", "打开 " + textDoubleTap.opens + " 次");
+
   // 阅读视图【之外】的图片（模拟编辑区）：不接管
   await mpage.evaluate(() => window.harness.clearGestureLogForTest && window.harness.clearGestureLogForTest());
   const mEdit = await mpage.evaluate(() => window.harness.imageBox("editImg"));

@@ -47,8 +47,12 @@ export interface ZoomableReaderSettings {
   readingGestures: boolean;
   /** 阅读视图里的图片怎么占宽度：撑满版心（等比）/ 不超过版心 / 原始尺寸 */
   readingImageWidth: ReadingImageWidth;
-  /** 手机：双击图片 = 放大查看（并阻止 Obsidian 的「双击进入编辑」） */
-  mobileImageGestures: boolean;
+  /** 手机：阅读视图里双击【不进编辑】（整个视图生效，不只是图片） */
+  mobileBlockDoubleTapEdit: boolean;
+  /** 手机：双击图片/图表 = 放大查看 */
+  mobileDoubleTapImage: boolean;
+  /** 手机：双击自检（每次拦截弹一条提示，排查用） */
+  mobileTapSelfCheck: boolean;
 
   /* --- 打开方式与版面 / Opening & page --- */
   /** 打开笔记时默认用哪种模式：版面（跟随主题行宽）或白板（一整张 1280px 宽版面） */
@@ -132,7 +136,10 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   readingGestures: true,
   /* 图片撑满版心：用户要「严格按照插件约束的宽度显示内容，等比放大」。 */
   readingImageWidth: "fill",
-  mobileImageGestures: true,
+  /* 手机阅读视图里双击进编辑是很糟糕的体验（用户实测反馈）：默认禁止，要编辑走菜单按钮。 */
+  mobileBlockDoubleTapEdit: true,
+  mobileDoubleTapImage: true,
+  mobileTapSelfCheck: false,
   defaultMode: "page",
   showToolbar: true,
   padding: 16,
@@ -174,7 +181,7 @@ export interface SettingSpecBase {
 
 export interface SettingToggleSpec extends SettingSpecBase {
   control: "toggle";
-  key: "readingGestures" | "mobileImageGestures" | "pinchZoom" | "showToolbar" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
+  key: "readingGestures" | "mobileBlockDoubleTapEdit" | "mobileDoubleTapImage" | "mobileTapSelfCheck" | "pinchZoom" | "showToolbar" | "imageViewer" | "diagramViewer" | "lightboxFitOnOpen" | "clickToOpenViewer" | "persistentZoomButton" | "diagramLayout" | "rememberPosition";
 }
 
 export interface SettingSliderSpec extends SettingSpecBase {
@@ -350,6 +357,16 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
       },
       {
         control: "toggle",
+        id: "mobile-block-double-tap-edit",
+        key: "mobileBlockDoubleTapEdit",
+        zh: "手机：双击不进编辑",
+        en: "Mobile: double tap does not open the editor",
+        zhDesc: "手机上在阅读视图里双击【任何位置】都不会进入编辑（Obsidian 默认的双击进编辑是阅读时最容易误触的手势）。要编辑请用菜单里的按钮。只在手机生效。",
+        enDesc: "On mobile, double-tapping anywhere in the reading view no longer opens the editor — Obsidian's default is the easiest gesture to trigger by accident while reading. Use the menu button when you really want to edit. Mobile only.",
+        aliases: ["双击", "编辑", "源码", "误触", "手机", "double", "tap", "edit", "source", "mobile"],
+      },
+      {
+        control: "toggle",
         id: "reading-gestures",
         key: "readingGestures",
         zh: "阅读视图手势缩放",
@@ -452,13 +469,23 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
       },
       {
         control: "toggle",
-        id: "mobile-image-gestures",
-        key: "mobileImageGestures",
+        id: "mobile-tap-self-check",
+        key: "mobileTapSelfCheck",
+        zh: "手机：双击自检（排查用）",
+        en: "Mobile: double-tap self-check (diagnostics)",
+        zhDesc: "打开后，每次被插件拦下的双击都会弹一条提示（拦到了什么、有没有打开查看器）。如果你发现双击仍然进了编辑，请打开它并把提示内容告诉我 —— 有没有提示，直接决定问题出在我们这一层还是宿主那一层。",
+        enDesc: "When on, every intercepted double tap shows a notice (what was caught, whether the viewer opened). If a double tap still opens the editor, turn this on and report what you see — whether the notice appears tells us which layer the problem is in.",
+        aliases: ["自检", "排查", "双击", "调试", "self-check", "debug", "double tap", "diagnostics"],
+      },
+      {
+        control: "toggle",
+        id: "mobile-double-tap-image",
+        key: "mobileDoubleTapImage",
         zh: "手机：双击图片 = 放大查看",
         en: "Mobile: double-tap an image to zoom it",
-        zhDesc: "手机上在阅读视图里双击图片会打开可缩放的查看器；同时阻止 Obsidian 的「双击进入编辑」——阅读模式要进编辑，请用菜单里的按钮。只在手机生效，桌面不受影响。",
-        enDesc: "On mobile, double-tapping an image inside the reading view opens the zoomable viewer, and Obsidian's double-tap-to-edit is suppressed (use the menu button to edit instead). Mobile only; the desktop behaviour is untouched.",
-        aliases: ["双击", "图片", "放大", "编辑", "手机", "double", "tap", "image", "zoom", "edit", "mobile"],
+        zhDesc: "手机上在阅读视图里双击图片/图表会打开可缩放的查看器。只在手机生效，桌面不受影响。",
+        enDesc: "On mobile, double-tapping an image or diagram inside the reading view opens the zoomable viewer. Mobile only; the desktop behaviour is untouched.",
+        aliases: ["双击", "图片", "放大", "手机", "double", "tap", "image", "zoom", "mobile"],
       },
       {
         control: "toggle",

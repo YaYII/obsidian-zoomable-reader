@@ -116,11 +116,14 @@ properties** of it and leaves your theme files untouched:
   no stretching, and an explicit `![[image.png|300]]` is normalised to the line width too, so a
   page never mixes three different image widths. Switch it to *fit within the line width* or
   *natural size* if you prefer the old behaviour.
-- **Mobile: double-tap an image to zoom it.** On a phone the natural gesture is a double tap, and
-  Obsidian's reading view uses that gesture to enter editing, which is a terrible match for
-  reading. The plugin intercepts the double tap inside the reading view, opens the zoomable viewer
-  instead, and suppresses the edit — use the menu button when you actually want to edit. Desktop is
-  deliberately untouched (there, a double click on an image keeps its usual meaning).
+- **Mobile: double tapping no longer opens the editor — anywhere in the reading view.** Obsidian's
+  reading view uses a double tap to enter editing, which is the easiest gesture to trigger by
+  accident while reading, so the plugin intercepts it across the whole reading view (text as well as
+  images). Use the menu button when you really want to edit. Double tapping an **image or diagram**
+  opens the zoomable viewer instead. Desktop is deliberately untouched.
+- **A self-check switch** (手机：双击自检) makes every intercepted double tap show a notice saying
+  what was caught and whether the viewer opened — the fastest way to tell whether a problem lives in
+  the plugin or in the host.
 - **Commands**: 阅读视图放大 / 阅读视图缩小 / 阅读视图复位到 100% — bind them to hotkeys if you
   prefer buttons. Each shows the new level in a notice.
 
@@ -151,7 +154,9 @@ Obsidian 1.13+ **settings search** — typing 双指 or pinch jumps straight to 
 | 阅读视图缩放 / Reading view zoom | 100% | Reflows (text grows, line width unchanged); pinch or Ctrl+wheel |
 | 阅读视图手势缩放 / Reading view zoom gestures | on | Pinch inside the reading view / Ctrl+wheel; the plain wheel and one-finger scroll are untouched |
 | 阅读视图图片宽度 / Reading view image width | 撑满版心 fill | Scale images to the line width keeping the ratio; or fit-within / natural size |
-| 手机：双击图片 = 放大查看 / Mobile: double-tap an image to zoom | on | Opens the viewer and suppresses Obsidian's double-tap-to-edit (mobile only) |
+| 手机：双击不进编辑 / Mobile: double tap does not open the editor | on | Anywhere in the reading view (text and images). Use the menu button to edit |
+| 手机：双击图片 = 放大查看 / Mobile: double-tap an image to zoom | on | Opens the zoomable viewer from an image or diagram |
+| 手机：双击自检 / Mobile: double-tap self-check | off | Shows a notice for every intercepted double tap (diagnostics) |
 | 打开笔记时的默认模式 / Default mode | 版面 page | 版面 page (theme line width) or 白板 whiteboard (1280 px page) |
 | 显示工具条 / Show toolbar | on | Zoom buttons, zoom level, fit width, mode switch |
 | 版心四周留白 / Page padding | 16 px | Gap between the page and the edge of the view |

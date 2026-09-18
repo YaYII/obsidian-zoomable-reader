@@ -2,7 +2,7 @@ import { Menu, Notice, Platform, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./src/defaults";
 import { DEFAULT_DIAGRAM_LAYOUT, DiagramLayout, MermaidGlobal, applyDiagramLayout } from "./src/diagram-layout";
 import { ImageLightbox, installZoomAffordance, type LightboxTarget } from "./src/lightbox";
-import { installMobileImageGestures } from "./src/mobile-image-gestures";
+import { installMobileReadingTaps } from "./src/mobile-reading-taps";
 import {
   READING_ZOOM_STEP,
   clampReadingZoom,
@@ -207,11 +207,24 @@ export default class ZoomableReaderPlugin extends Plugin {
       this.detachMobileImageGestures();
       this.detachMobileImageGestures = null;
     }
-    const detachMobile = installMobileImageGestures(doc, {
-      mobile: this.settings.mobileImageGestures && Platform.isMobile,
-      images: this.settings.imageViewer,
-      diagrams: this.settings.diagramViewer,
+    const detachMobile = installMobileReadingTaps(doc, {
+      mobile: Platform.isMobile,
+      blockDoubleTapEdit: this.settings.mobileBlockDoubleTapEdit,
+      images: this.settings.mobileDoubleTapImage && this.settings.imageViewer,
+      diagrams: this.settings.mobileDoubleTapImage && this.settings.diagramViewer,
       onOpen: (found: LightboxTarget) => this.openTarget(found),
+      onIntercept: (info) => {
+        if (!this.settings.mobileTapSelfCheck) return;
+        new Notice(
+          "双击自检 / tap self-check: " +
+            info.gesture +
+            " · 命中 " +
+            info.kind +
+            (info.opened ? " → 打开查看器" : " → 不打开") +
+            " · " +
+            info.element
+        );
+      },
     });
     this.detachMobileImageGestures = detachMobile;
     this.register(detachMobile);
@@ -367,7 +380,9 @@ export default class ZoomableReaderPlugin extends Plugin {
       key === "imageViewer" ||
       key === "diagramViewer" ||
       key === "clickToOpenViewer" ||
-      key === "mobileImageGestures"
+      key === "mobileBlockDoubleTapEdit" ||
+      key === "mobileDoubleTapImage" ||
+      key === "mobileTapSelfCheck"
     ) {
       this.registerLightbox();
     }

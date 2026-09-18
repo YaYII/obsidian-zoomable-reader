@@ -57,11 +57,14 @@ var simLastTapAt = 0;
 var simLastPoint = { x: 0, y: 0 };
 /* 模拟 Obsidian 的「双击进入编辑」：只在双击时触发（单次 tap 不是编辑），
  * 而且它自己也是一段【冒泡阶段】的逻辑 —— 我们真把事件吃掉时，它一次都不该被调用。 */
+function inReadingView(event) {
+  return event.target instanceof Element && !!event.target.closest(".markdown-reading-view");
+}
 document.addEventListener("dblclick", function (event) {
-  if (event.target instanceof Element && event.target.closest("#photo")) editCount += 1;
+  if (inReadingView(event)) editCount += 1;
 }, false);
 document.addEventListener("touchend", function (event) {
-  if (!(event.target instanceof Element) || !event.target.closest("#photo")) return;
+  if (!inReadingView(event)) return;
   var t = event.changedTouches[0];
   if (!t) return;
   var now = Date.now();
@@ -81,11 +84,12 @@ function installMobileGestures(options) {
   gestureLog = [];
   openLog = [];
   editCount = 0;
-  detachMobile = window.installMobileImageGestures(document, Object.assign({
+  detachMobile = window.installMobileReadingTaps(document, Object.assign({
     mobile: true,
+    blockDoubleTapEdit: true,
     images: true,
     diagrams: true,
-    onHit: function (target, gesture) { gestureLog.push({ kind: target.kind, gesture: gesture }); },
+    onIntercept: function (info) { gestureLog.push({ kind: info.kind, gesture: info.gesture }); },
     onOpen: function (target) { openLog.push(target.kind); },
   }, options || {}));
   return function () { if (detachMobile) { detachMobile(); detachMobile = null; } };
