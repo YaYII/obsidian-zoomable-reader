@@ -63,6 +63,13 @@ export const DEFAULT_BOARD_LAYOUT: Omit<BoardLayoutOptions, "heights"> = {
   padding: 40,
 };
 
+/** 纵向流里每深一级缩进多少（px）。缩进到第 3 级就不再往里缩了：A5 纸再窄就不是纸了。 */
+export const FLOW_INDENT_STEP = 18;
+export const FLOW_MAX_INDENT_DEPTH = 3;
+
+/** 白板的两种排版：单栏纵向流（读文档）/ 分支树（看全局）。 */
+export type BoardLayoutMode = "flow" | "tree";
+
 /** 估高参数：只求「八九不离十」，真实高度由渲染后的第二遍量出来。 */
 const METRICS = {
   /** 卡片头部（标题 + 上下内边距） */
@@ -219,6 +226,59 @@ export function layoutBoard(doc: BoardDoc, options: Partial<BoardLayoutOptions> 
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+/**
+ * 单栏纵向流：一张 A5 宽的纸，按【文档顺序】自上而下叠成一列。
+ *
+ * 这是给「读」用的排版：往下滑就是往下读，不需要横向找内容（手机尤其需要）。
+ * 层级用缩进 + 卡片左侧色条表达，所以这里不画连线 —— 一行一列里画线只会互相压住。
+ * 原文档顺序就是 doc.nodes 的顺序（前序遍历），所以 y 一定随文档单调递增。
+ */
+export function layoutBoardFlow(doc: BoardDoc, options: Partial<BoardLayoutOptions> = {}): BoardLayout {
+  const opts: BoardLayoutOptions = Object.assign({}, DEFAULT_BOARD_LAYOUT, options);
+  const cardWidth = Math.max(160, opts.cardWidth);
+
+  const cards: BoardCard[] = [];
+  const byId: Record<string, BoardCard> = {};
+  let y = opts.padding;
+  let indentMax = 0;
+
+  for (const node of doc.nodes) {
+    const measured = opts.heights ? opts.heights[node.id] : undefined;
+    const height = typeof measured === "number" && measured > 0 ? measured : estimateCardHeight(node, cardWidth);
+    const level = Math.min(node.depth, FLOW_MAX_INDENT_DEPTH);
+    const indent = level * FLOW_INDENT_STEP;
+    indentMax = Math.max(indentMax, indent);
+    const card: BoardCard = {
+      id: node.id,
+      x: opts.padding + indent,
+      y: Math.round(y),
+      width: cardWidth,
+      height: height,
+      depth: node.depth,
+    };
+    cards.push(card);
+    byId[node.id] = card;
+    y += height + opts.gapY;
+  }
+
+  return {
+    cards: cards,
+    links: [],
+    byId: byId,
+    width: opts.padding * 2 + indentMax + cardWidth,
+    height: Math.max(opts.padding * 2, y - opts.gapY + opts.padding),
+  };
+}
+
+/** 按排版模式分发（视图与验证台共用同一份判断）。 */
+export function layoutBoardByMode(
+  doc: BoardDoc,
+  mode: BoardLayoutMode,
+  options: Partial<BoardLayoutOptions> = {}
+): BoardLayout {
+  return mode === "flow" ? layoutBoardFlow(doc, options) : layoutBoard(doc, options);
 }
 
 /** 连线的 SVG 路径：两端各留一半水平距离做控制点，读起来像「分支」而不是直线斜插。 */

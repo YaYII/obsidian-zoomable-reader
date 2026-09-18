@@ -115,9 +115,10 @@ var host = document.getElementById("host");
 var label = document.getElementById("label");
 
 var settings = {
-  /* 卡片宽度直接取插件的出厂默认（A5 = 148mm ≈ 560px）——
+  /* 卡片宽度与排版都直接取插件的出厂默认（A5 = 148mm ≈ 560px；排版 = 单栏纵向流）——
    * 验证器就不用把数字抄一遍，默认值改了两边一起动。 */
   cardWidth: window.ZoomableReaderDefaults.boardCardWidth,
+  layout: window.ZoomableReaderDefaults.boardLayout,
   gap: 32,
   padding: 40,
   connectors: true,
@@ -207,6 +208,7 @@ async function rerender() {
   model = fitted;
   var gap = settings.gap;
   board = await window.BoardRender.render(fitted.doc, host, {
+    layout: settings.layout,
     cardWidth: settings.cardWidth,
     gapX: Math.round(gap * 2.5),
     gapY: gap,
@@ -315,6 +317,8 @@ function visibleCards() {
     setPinch: function (on) { settings.pinch = !!on; buildLayer(); },
     setModeClasses: function (mode) { window.BoardRender.applyModeClasses(rootEl, mode); },
     cardWidth: function () { return settings.cardWidth; },
+    layoutMode: function () { return settings.layout; },
+    setLayout: async function (mode) { settings.layout = mode; var t = layer.transform; await rerender(); layer.setTransform(t, false); },
     modeClasses: function () { return rootEl.className; },
     renderFileMode: renderFileMode,
     renderWithoutModeClasses: renderWithoutModeClasses,
@@ -326,6 +330,7 @@ function visibleCards() {
         scale: layer.transform.scale,
         cards: board.layout.cards.length,
         links: board.layout.links.length,
+        layout: settings.layout,
         width: board.layout.width,
         height: board.layout.height,
         commits: commits,

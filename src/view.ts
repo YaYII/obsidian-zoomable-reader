@@ -2,6 +2,7 @@ import { Component, ItemView, MarkdownView, MarkdownRenderer, Notice, TFile, Wor
 import type ZoomableReaderPlugin from "../main";
 import { foldToFit, parseBoard, type BoardDoc } from "./board-model";
 import { DEFAULT_BOARD_LAYOUT } from "./board-layout";
+import type { BoardLayoutMode } from "./board-layout";
 import { applyModeClasses, cardIdFromClick, renderBoardInto, type BoardRenderResult } from "./board-render";
 import type { ReaderMode } from "./settings-spec";
 import { BOARD_MIN_SCALE, ZOOM_STEP, ZoomPanLayer, formatPercent, type Transform } from "./zoom-pan";
@@ -118,6 +119,20 @@ export class ZoomableReaderView extends ItemView {
         this.makeButton(bar, "scan", "回到全图 / Fit the whole board", () => this.fitBoard());
         this.makeButton(bar, "focus", "回到标题卡 / Back to the title card", () => this.focusRoot());
         this.makeButton(bar, "refresh-cw", "重新编译 / Recompile now", () => void this.recompile());
+        /* 排版一键切换：纵向流（上下滑着读）⇄ 分支树（横向看全局） */
+        this.makeButton(
+          bar,
+          this.plugin.settings.boardLayout === "flow" ? "list" : "git-branch",
+          this.plugin.settings.boardLayout === "flow"
+            ? "现在是单栏纵向流：点一下换成分支树 / single column - switch to branch tree"
+            : "现在是分支树：点一下换成单栏纵向流 / branch tree - switch to single column",
+          () => {
+            const next: BoardLayoutMode = this.plugin.settings.boardLayout === "flow" ? "tree" : "flow";
+            this.plugin.settings.boardLayout = next;
+            void this.plugin.saveSettings();
+            void this.recompile();
+          }
+        );
       } else {
         this.makeButton(bar, "move-horizontal", "适配宽度 / Fit width", () => {
           if (this.layer) this.layer.fitWidth(this.plugin.settings.padding);
@@ -417,6 +432,7 @@ export class ZoomableReaderView extends ItemView {
     let rendered: BoardRenderResult;
     try {
       rendered = await renderBoardInto(fitted.doc, host, {
+        layout: this.plugin.settings.boardLayout,
         cardWidth: this.plugin.settings.boardCardWidth,
         gapX: Math.round(gap * 2.5),
         gapY: gap,

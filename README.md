@@ -13,9 +13,9 @@ wheel on desktop, drag to pan.
 
 ## 中文速览
 
-- **白板模式**：把一篇 Markdown 编译成白板 —— 每个标题一张卡（**默认 A5 纸大小，148mm**），
-  卡里是这一节的正文，卡片之间连出大纲。打开即**原大**（不再缩成一小块），手机上一眼看到结构，
-  捏合放大读细节，点卡片标题把这张卡放到眼前。**每次进白板都重新编译一遍**，笔记改了白板跟着变
+- **白板模式**：把一篇 Markdown 编译成一张 **A5 纸（148mm）宽的单栏**，**往下滑就是往下读**
+  （默认「单栏纵向流」；标题成节、缩进表达层级、打开即原大）。想要「横着看全局」就在设置里换成
+  **分支树**：标题成列成卡、连线成大纲。**每次进白板都重新编译一遍**，笔记改了白板跟着变
   （只读，不落盘）。设置 → **白板模式 → 打开笔记时的默认模式 → 白板**，之后就默认进白板。
 - **双指捏合在哪**：设置页第一组就是 **手势与缩放 → 双指捏合缩放**（还有一张「手势速查」表）。
   手机上要能缩放，必须用**本插件的视图**打开笔记（侧边栏放大镜图标、命令面板，或文件列表长按
@@ -68,7 +68,10 @@ Notes:
 
 ![The same note as a whiteboard: heading cards, content blocks, connectors](docs/images/screenshot-board-desktop.png)
 
-This is not "the note floating on a board" — the Markdown itself is compiled:
+Two layouts, one compiler. The default is **single column**: one A5-wide sheet per section, stacked
+in document order — scrolling down *is* reading down, with indentation for hierarchy. Switch to
+**branch tree** when you want the whole outline sideways. This is not "the note floating on a board"
+— the Markdown itself is compiled:
 
 - **Every heading becomes a card**, holding that section's content. Frontmatter is skipped (it is
   metadata, not the note). Code fences, tables, callouts, quotes, math, images and Mermaid blocks
@@ -130,10 +133,11 @@ Obsidian 1.13+ **settings search** — typing 双指 or pinch jumps straight to 
 | 打开笔记时的默认模式 / Default mode | 版面 page | 版面 page or 白板 whiteboard |
 | 显示工具条 / Show toolbar | on | Zoom buttons, zoom level, mode switch, fit |
 | 版心四周留白 / Page padding | 16 px | Gap between the note and the edge (page mode) |
+| 白板排版 / Board layout | 单栏纵向流 single column | 单栏纵向流 scroll down to read, or 分支树 branch tree to see the outline sideways |
 | 卡片宽度（纸张大小）/ Card width (paper) | 560 px ≈ A5 | Whiteboard card width; A5 = 148 mm, A4/A6 also easy to pick |
 | 卡片展开层级 / Outline depth | H3 | Headings deeper than this fold into the ancestor card |
 | 卡片间距 / Card spacing | 32 px | Vertical gap; parent-to-child spacing is 2.5x that |
-| 显示连线 / Show connectors | on | Parent-to-child bezier connectors |
+| 显示连线 / Show connectors | on | Parent-to-child bezier connectors (branch-tree layout; the single column shows hierarchy by indentation) |
 | 卡片数量上限 / Card limit | 120 | Above this the board folds deeper automatically |
 | 放大按钮的位置 / Zoom button corner | 左上 | 左上 or 右上 — the top-right belongs to Obsidian's own controls |
 | 放大按钮常驻显示 / Always show the zoom button | on | Off: the button only appears on hover |

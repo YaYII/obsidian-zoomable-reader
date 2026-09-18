@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.3
+
+- **Two layouts for the whiteboard, and the default is the one you read.** The board used to be a
+  branch tree only: headings in columns with connectors. On a phone that means hunting for content
+  sideways. The default is now **单栏纵向流 / single column** — one A5-wide sheet per section,
+  stacked in document order, so **scrolling down is reading down**, with indentation (up to three
+  levels) and the left accent bar carrying the hierarchy instead of connectors.
+- **分支树 / branch tree** is still there for the other job: seeing the whole outline at a glance.
+  Pick it in the settings (设置 → 白板模式 → 白板排版) or flip it from the view toolbar; connectors
+  belong to that layout, and the single column draws none (a line inside a one-wide column only
+  overlaps the cards).
+- Why cards at all, if it reads like a document? Because the board is zoomable when Obsidian's
+  reading view is not: each section stays a sheet you can pinch into, tap to bring to the front, and
+  the sections still fold by heading depth and by card limit. It is a page you can zoom, not a
+  scroll that cannot.
+
+Verification: `npm run verify:board` is now **48 assertions**. The new ones assert the shipped
+default layout is `flow` (read from the real settings data, not a number copied into the test),
+that every card shares the paper width with `y` strictly increasing in document order, that a
+single column draws **zero** connectors, and — the behavioural one — that **scrolling down alone
+reaches the last section** (the final card enters the viewport). Switching to branch tree flips the
+connector assertions back on (count = parent/child relations, endpoints on the card edges), and
+switching back drops them again.
+
 ## 1.3.2
 
 - **Cards are paper now: A5 by default (148 mm ≈ 560 px).** The default card width was 320 px, so a

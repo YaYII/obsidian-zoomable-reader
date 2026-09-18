@@ -16,7 +16,7 @@
  * ========================================================================== */
 
 import type { BoardDoc, BoardNode } from "./board-model";
-import { layoutBoard, linkPath, type BoardLayout, type BoardLayoutOptions } from "./board-layout";
+import { layoutBoardByMode, linkPath, type BoardLayout, type BoardLayoutMode, type BoardLayoutOptions } from "./board-layout";
 
 export const BOARD_CLASS = "zr-board";
 export const BOARD_LINKS_CLASS = "zr-board-links";
@@ -47,7 +47,9 @@ export function applyModeClasses(root: HTMLElement, mode: "page" | "board"): voi
 }
 
 export interface BoardRenderOptions extends Partial<Omit<BoardLayoutOptions, "heights">> {
-  /** 是否画父子连线 */
+  /** 排版：单栏纵向流（默认，读文档）或分支树（看全局） */
+  layout?: BoardLayoutMode;
+  /** 是否画父子连线（只对分支树有意义；纵向流靠缩进表达层级） */
   connectors: boolean;
   /** 根卡片标题下的一行元信息（双语由调用方决定） */
   meta?: string;
@@ -178,7 +180,7 @@ export async function renderBoardInto(
     const height = card.offsetHeight;
     if (height > 0) heights[id] = height;
   }
-  const layout = layoutBoard(doc, Object.assign({}, layoutOptions, { heights: heights }));
+  const layout = layoutBoardByMode(doc, options.layout || "flow", Object.assign({}, layoutOptions, { heights: heights }));
 
   for (const [id, card] of cards) {
     const rect = layout.byId[id];

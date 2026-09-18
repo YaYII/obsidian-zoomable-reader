@@ -133,6 +133,39 @@ try {
   assert(snapshot.cards === model.length && model.length >= 5, "每个标题都编译成一张卡", "卡片 " + snapshot.cards + " / 模型节点 " + model.length);
   assert(model.some((n) => n.title.indexOf("手势清单") >= 0), "中文标题原样成卡", model.map((n) => n.title).slice(0, 4).join(" / "));
 
+  /* ② 默认排版 = 单栏纵向流：一张 A5 纸，往下滑就是往下读（用户要求「直接往下滑动就好了」） */
+  const flowDefault = await page.evaluate(() => window.ZoomableReaderDefaults.boardLayout);
+  const flowMode = await page.evaluate(() => window.harness.layoutMode());
+  assert(flowDefault === "flow" && flowMode === "flow", "默认排版 = 单栏纵向流（不是横着铺开的卡片树）", "默认=" + flowDefault + " 运行时=" + flowMode);
+
+  const flowLayout = await page.evaluate(() => window.harness.layout());
+  const samePaper = flowLayout.every((c) => Math.abs(c.width - snapshot.cardWidth) < 0.5);
+  const monotonic = flowLayout.every((c, i) => i === 0 || c.y >= flowLayout[i - 1].y + flowLayout[i - 1].height);
+  assert(
+    samePaper && monotonic,
+    "一列到底：纸张宽度一致 + y 随文档顺序向下单调（往下滑就是往下读）",
+    "首卡 y=" + fmt(flowLayout[0].y) + "，末卡底 y=" + fmt(flowLayout[flowLayout.length - 1].y + flowLayout[flowLayout.length - 1].height)
+  );
+  const flowX = Array.from(new Set(flowLayout.map((c) => c.x))).sort((a, b) => a - b);
+  assert(flowX.length >= 1 && flowX.length <= 4, "层级用缩进表达（最多缩 3 级）", flowX.join(" / "));
+  const flowPaths = await page.evaluate(() => document.querySelectorAll(".zr-board-links path").length);
+  assert(flowPaths === 0, "纵向流里不画连线（层级靠缩进与左侧色条，画线只会互相压住）", flowPaths + " 条 path");
+
+  /* 一路往下滑能读到最后一节 —— 这就是「不用横着找内容」的行为证据 */
+  await page.evaluate(() => window.harness.reset(16));
+  await page.mouse.move(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  const lastCard = flowLayout[flowLayout.length - 1];
+  let reachedEnd = false;
+  for (let i = 0; i < 40 && !reachedEnd; i += 1) {
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(6);
+    const seen = (await page.evaluate(() => window.harness.domCards())).find((c) => c.id === lastCard.id);
+    reachedEnd = !!seen && seen.top >= -1 && seen.top + seen.height <= rect.height + 1;
+  }
+  assert(reachedEnd, "只往下滑就能读到最后一节（末尾卡片进入视口）", "需要 " + (reachedEnd ? "≤ 40" : "> 40") + " 次滚动");
+  await page.evaluate(() => window.harness.reset(0));
+  await page.waitForTimeout(40);
+
   // ② 排版几何：把 layer 归零到 100%，于是 DOM 坐标 = 排版坐标，可以逐张对
   await page.evaluate(() => window.harness.reset(0));
   await page.waitForTimeout(60);
@@ -169,12 +202,20 @@ try {
     mismatched.map((c) => c.id).join(", ") || "全部一致"
   );
 
-  const relations = model.reduce((sum, n) => sum + n.children.length, 0);
-  assert(links.length === relations && relations > 0, "连线条数 = 父子关系数", links.length + " / " + relations);
+  /* 连线只属于分支树排版：切过去再验（顺带证明「排版切换」真的换了布局） */
+  await page.evaluate(() => window.harness.setLayout("tree"));
+  await page.waitForTimeout(160);
+  const treeLayout = await page.evaluate(() => window.harness.layout());
+  const treeLinks = await page.evaluate(() => window.harness.links());
+  const treeDom = await page.evaluate(() => window.harness.domCards());
+  const treeById = new Map(treeLayout.map((c) => [c.id, c]));
 
-  const badLinks = links.filter((l) => {
-    const from = byId.get(l.from);
-    const to = byId.get(l.to);
+  const relations = model.reduce((sum, n) => sum + n.children.length, 0);
+  assert(treeLinks.length === relations && relations > 0, "分支树：连线条数 = 父子关系数", treeLinks.length + " / " + relations);
+
+  const badLinks = treeLinks.filter((l) => {
+    const from = treeById.get(l.from);
+    const to = treeById.get(l.to);
     if (!from || !to) return true;
     return !(
       near(l.x1, from.x + from.width, 0.5) &&
@@ -183,7 +224,7 @@ try {
       near(l.y2, to.y + to.height / 2, 0.5)
     );
   });
-  assert(badLinks.length === 0, "连线端点贴父卡右中 / 子卡左中", badLinks.map((l) => l.from + "→" + l.to).join(", ") || links.length + " 条");
+  assert(badLinks.length === 0, "分支树：连线端点贴父卡右中 / 子卡左中", badLinks.map((l) => l.from + "→" + l.to).join(", ") || treeLinks.length + " 条");
 
   const pathCheck = await page.evaluate(() => {
     const svg = document.querySelector(".zr-board-links");
@@ -201,7 +242,7 @@ try {
       };
     });
   });
-  const domById = new Map(dom.map((d) => [d.id, d]));
+  const domById = new Map(treeDom.map((d) => [d.id, d]));
   const badPaths = pathCheck.filter((p) => {
     const from = domById.get(p.from);
     const to = domById.get(p.to);
@@ -213,7 +254,16 @@ try {
       near(p.y2, to.top + to.height / 2, 1.5)
     );
   });
-  assert(badPaths.length === 0, "SVG 连线真的落在卡片边缘上（渲染后实测）", badPaths.length + " 条偏差");
+  assert(badPaths.length === 0, "分支树：SVG 连线真的落在卡片边缘上（渲染后实测）", badPaths.length + " 条偏差");
+
+  /* 切回默认排版（纵向流）：连线消失，后面的截图与手势断言都跑在出厂默认状态下 */
+  await page.evaluate(() => window.harness.setLayout("flow"));
+  await page.waitForTimeout(160);
+  const backLinks = await page.evaluate(() => window.harness.links());
+  const backPaths = await page.evaluate(() => document.querySelectorAll(".zr-board-links path").length);
+  assert(backLinks.length === 0 && backPaths === 0, "切回单栏纵向流：连线消失（排版切换真的换了布局）", backPaths + " 条 path");
+  await page.evaluate(() => window.harness.reset(0));
+  await page.waitForTimeout(40);
 
   await page.screenshot({ path: path.join(DOCS, "screenshot-board-desktop.png"), fullPage: false });
   await page.screenshot({ path: path.join(OUT, "board-desktop.png"), fullPage: false });

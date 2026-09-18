@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import { parseBoard } from "../src/board-model";
 import {
   DEFAULT_BOARD_LAYOUT,
+  FLOW_INDENT_STEP,
+  FLOW_MAX_INDENT_DEPTH,
   cardAt,
   estimateCardHeight,
   layoutBoard,
+  layoutBoardByMode,
+  layoutBoardFlow,
   linkPath,
   type BoardCard,
 } from "../src/board-layout";
@@ -157,5 +161,67 @@ describe("linkPath / cardAt", () => {
     const card = layout.byId["n2"];
     expect(cardAt(layout, card.x + 5, card.y + 5)?.id).toBe("n2");
     expect(cardAt(layout, card.x - 20, card.y - 20)).toBeNull();
+  });
+});
+describe("layoutBoardFlow：单栏纵向流（一张 A5 纸，往下滑就是往下读）", () => {
+  const layout = layoutBoardFlow(doc, { cardWidth: 560, gapY: 32, padding: 40 });
+
+  it("所有卡片同宽（就是纸张宽度），一列到底", () => {
+    for (const card of layout.cards) expect(card.width).toBe(560);
+  });
+
+  it("y 随【文档顺序】严格递增：往下滑就是往下读", () => {
+    for (let i = 1; i < layout.cards.length; i += 1) {
+      const prev = layout.cards[i - 1];
+      expect(layout.cards[i].y).toBeGreaterThanOrEqual(prev.y + prev.height);
+    }
+    /* 顺序也必须与模型的前序（= 文档顺序）一致 */
+    expect(layout.cards.map((c) => c.id)).toEqual(doc.nodes.map((n) => n.id));
+  });
+
+  it("层级用缩进表达，且缩进到第 3 级就封顶（纸再窄就不是纸了）", () => {
+    for (const card of doc.nodes) {
+      const rect = layout.byId[card.id];
+      expect(rect.x).toBe(40 + Math.min(card.depth, FLOW_MAX_INDENT_DEPTH) * FLOW_INDENT_STEP);
+    }
+    const deep = layout.cards.filter((c) => c.depth >= FLOW_MAX_INDENT_DEPTH).map((c) => c.x);
+    expect(new Set(deep).size).toBe(1);
+  });
+
+  it("一列里不画连线（靠缩进与左侧色条表达层级，画线只会互相压住）", () => {
+    expect(layout.links).toHaveLength(0);
+  });
+
+  it("卡片两两不重叠，且板子边界包住全部卡片", () => {
+    for (let i = 0; i < layout.cards.length; i += 1) {
+      for (let j = i + 1; j < layout.cards.length; j += 1) {
+        expect(overlaps(layout.cards[i], layout.cards[j])).toBe(false);
+      }
+      expect(layout.cards[i].x + layout.cards[i].width).toBeLessThanOrEqual(layout.width);
+      expect(layout.cards[i].y + layout.cards[i].height).toBeLessThanOrEqual(layout.height);
+    }
+  });
+
+  it("宽度 = 留白×2 + 最大缩进 + 纸张宽度（不会随内容横着长）", () => {
+    const maxIndent = Math.min(3, FLOW_MAX_INDENT_DEPTH) * FLOW_INDENT_STEP;
+    expect(layout.width).toBe(40 * 2 + maxIndent + 560);
+  });
+
+  it("实测高度优先（第二遍按真实 DOM 高度重排）", () => {
+    const tall = layoutBoardFlow(doc, { heights: { n1: 900 } });
+    expect(tall.byId["n1"].height).toBe(900);
+    expect(tall.height).toBeGreaterThan(layout.height);
+  });
+
+  it("空文档（只有根卡）也能排，不出现 NaN", () => {
+    const empty = layoutBoardFlow(parseBoard("", { title: "空" }), {});
+    expect(empty.cards).toHaveLength(1);
+    expect(Number.isFinite(empty.width)).toBe(true);
+    expect(Number.isFinite(empty.height)).toBe(true);
+  });
+
+  it("layoutBoardByMode 分发正确（默认流的入口）", () => {
+    expect(layoutBoardByMode(doc, "flow", { cardWidth: 560 }).links).toHaveLength(0);
+    expect(layoutBoardByMode(doc, "tree", { cardWidth: 560 }).links.length).toBeGreaterThan(0);
   });
 });

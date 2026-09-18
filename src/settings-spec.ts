@@ -12,6 +12,8 @@
  * ========================================================================== */
 
 export type ReaderMode = "page" | "board";
+/** 白板排版：flow = 单栏纵向流（一张 A5 纸，上下滑着读）；tree = 分支树（横着看全局）。 */
+export type BoardLayoutMode = "flow" | "tree";
 export type ZoomButtonCorner = "top-left" | "top-right";
 
 export interface ZoomableReaderSettings {
@@ -44,6 +46,8 @@ export interface ZoomableReaderSettings {
   boardConnectors: boolean;
   /** 卡片数量上限：超过就自动折得更深，保证手机上不卡 */
   boardMaxCards: number;
+  /** 白板排版：单栏纵向流（默认）还是分支树 */
+  boardLayout: BoardLayoutMode;
 
   /* --- 图片与图表查看器 / Image & diagram viewer --- */
   imageViewer: boolean;
@@ -105,6 +109,8 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   boardGap: 32,
   boardConnectors: true,
   boardMaxCards: 120,
+  /* 默认单栏纵向流：白板是拿来【读】的 —— 往下滑就是往下读，不用横着找内容（手机尤其需要）。 */
+  boardLayout: "flow",
   imageViewer: true,
   diagramViewer: true,
   lightboxFitOnOpen: true,
@@ -156,7 +162,7 @@ export interface SettingSliderSpec extends SettingSpecBase {
 
 export interface SettingDropdownSpec extends SettingSpecBase {
   control: "dropdown";
-  key: "defaultMode" | "zoomButtonCorner";
+  key: "defaultMode" | "zoomButtonCorner" | "boardLayout";
   options: Record<string, string>;
 }
 
@@ -309,6 +315,20 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
     enIntro: "Whiteboard compiles a note into a card canvas: every heading is a card holding that section's content, and connectors draw the outline. Cards default to A5 paper (148mm) and open at natural size; the board is recompiled every time you enter it and follows the note as you edit (read-only, nothing is written).",
     items: [
       {
+        control: "dropdown",
+        id: "board-layout",
+        key: "boardLayout",
+        options: {
+          flow: "单栏纵向流（上下滑动读）/ Single column (scroll down)",
+          tree: "分支树（横向看全局）/ Branch tree (explore sideways)",
+        },
+        zh: "白板排版",
+        en: "Board layout",
+        zhDesc: "单栏纵向流：一张 A5 纸从上往下读，往下滑就是往下读（默认，手机推荐）。分支树：标题成列成卡、连线成大纲，一眼看全局但要横向找内容。",
+        enDesc: "Single column reads top to bottom like paper (default, best on a phone). Branch tree lays headings out in columns with connectors, showing the whole outline at a glance but requiring sideways panning.",
+        aliases: ["排版", "布局", "纵向", "单栏", "滑动", "滚动", "树", "layout", "column", "scroll", "vertical", "tree", "flow"],
+      },
+      {
         control: "slider",
         id: "board-card-width",
         key: "boardCardWidth",
@@ -356,8 +376,8 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
         key: "boardConnectors",
         zh: "显示连线",
         en: "Show connectors",
-        zhDesc: "画出父卡到子卡的贝塞尔连线，一眼看出大纲结构。",
-        enDesc: "Draws curved connectors from a parent card to its children.",
+        zhDesc: "分支树排版下画出父卡到子卡的连线（单栏纵向流靠缩进与左侧色条表达层级，不画线）。",
+        enDesc: "In branch-tree layout, draws curved connectors from a parent card to its children. The single-column layout shows hierarchy with indentation instead.",
         aliases: ["连线", "连接", "线", "connector", "edge", "line"],
       },
       {
