@@ -24,6 +24,22 @@ export interface LightboxOptions {
   onClose?: () => void;
 }
 
+/* ---------------------------------------------------------------- 高清的基准
+ * 一张图「多大算 100%」：答案是【1 个源像素 = 1 个设备像素】，不是 1 个 CSS 像素。
+ *
+ * 用户原话：「双击后的图片，不要压缩了，因为我双击就是需要高清的，否则放大查看都模糊了」。
+ * 以前把源图的自然像素当成 CSS 像素（1600px 的图 = 1600 CSS px）：
+ * 在 DPR=3 的手机上，100% 其实是把一张 1600px 的位图铺到 4800 个物理像素上 —— 横向拉伸 3 倍，
+ * 正是用户看到的糊。改成 1600/3 ≈ 533 CSS px 后：
+ *   · 100%（读数里的 1600 x 900 px）就是原图分辨率，一个源像素对一个物理像素，最清；
+ *   · 再往上放大才是插值 —— 那是「放大镜」，不是「查看器没给我高清图」。
+ * DPR=1 的桌面上这个除数是 1，行为与从前完全一致。 */
+export function nativePixelSize(natural: number, dpr: number): number {
+  const ratio = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  if (!(natural > 0)) return 0;
+  return Math.round((natural / ratio) * 100) / 100;
+}
+
 interface MovedNode {
   node: Element;
   parent: Node;
@@ -65,6 +81,7 @@ export class ImageLightbox {
     const onLoad = () => {
       this.naturalWidth = probe.naturalWidth || 0;
       this.naturalHeight = probe.naturalHeight || 0;
+      this.applyNativePixelSize(probe);
       this.afterContentReady();
     };
     probe.addEventListener("load", onLoad, { once: true });
@@ -255,9 +272,27 @@ export class ImageLightbox {
     else this.fit();
   }
 
+  /** 把图按「1 源像素 = 1 设备像素」摆进查看器（见 nativePixelSize 的注释）。 */
+  private applyNativePixelSize(probe: HTMLImageElement): void {
+    if (!this.naturalWidth || !this.naturalHeight) return;
+    const ratio = this.pixelRatio();
+    /* 只写宽高这两条：max-width / max-height 由 styles.css 的 .zr-lightbox-image 解除
+     * （主题与宿主的 max-width: 100% 会把刚摆好的 1:1 又压回去，高清在窄屏上立刻失效；
+     *  写在样式表里也正好避开 lint 的「不要直接改 element.style」）。 */
+    probe.style.width = nativePixelSize(this.naturalWidth, ratio) + "px";
+    probe.style.height = nativePixelSize(this.naturalHeight, ratio) + "px";
+  }
+
+  private pixelRatio(): number {
+    const win = this.doc.defaultView;
+    const dpr = win && typeof win.devicePixelRatio === "number" ? win.devicePixelRatio : 1;
+    return Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  }
+
   private fit(): void {
     if (!this.layer || !this.root) return;
-    this.layer.fitWidth(24);
+    /* 第二个参数是比例上限：小图打开时原样 100%，绝不放大了再看（放大 = 插值 = 糊）。 */
+    this.layer.fitWidth(24, 1);
     this.updateReadout(this.layer.transform);
   }
 
@@ -637,6 +672,12 @@ function bindPersistent(doc: Document, opts: ZoomAffordanceOptions): () => void 
       event.preventDefault();
       event.stopPropagation();
       opts.onTarget({ kind: isSvg ? "diagram" : "image", element: target });
+    });
+    /* 连点两下按钮 = 两次「放大」。第二下不该被宿主的「双击进编辑」抢走：
+     * 按钮就在图片角上，手指稍微偏一点就点在按钮上（用户报过「双击还是进了编辑」）。 */
+    button.addEventListener("dblclick", (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
     });
     host.appendChild(button);
     target.setAttribute(BOUND_ATTR, "1");

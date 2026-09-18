@@ -361,6 +361,51 @@ try {
     "屏宽 " + fmt(mobileBoxes.reading) + " · 图 " + fmt(mobileBoxes.diagram) + " · 照片 " + fmt(mobileBoxes.photo)
   );
 
+  /* ⑫ 手机：放大按钮要【自己看得见、点得开】—— 用户原话：
+   *    「你应该展示放大的 icon，这样我就可以点击了，而不是依靠点击图片，
+   *      因为图片点击的时候可能点击到了背景上去了，所以体验不是很好」。
+   *    这条路以前是封死的：styles.css 里 @media (hover: none) 直接把按钮 display:none 了。 */
+  await mpage.evaluate(() => {
+    window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" });
+    window.harness.installMobileGestures({ mobile: true, blockDoubleTapEdit: true });
+    window.harness.installAffordance("top-left");
+  });
+  await mpage.waitForTimeout(150);
+  const btn = await mpage.evaluate(() => window.harness.affordanceBoxFor("photo"));
+  assert(
+    !!btn && btn.display !== "none" && btn.visibility !== "hidden" && Number(btn.opacity) >= 0.85,
+    "手机（触屏、没有悬停）上放大按钮【常驻可见】（以前是 display:none，用户根本看不到）",
+    btn ? "display=" + btn.display + " opacity=" + btn.opacity + " " + Math.round(btn.width) + "x" + Math.round(btn.height) : "没有按钮"
+  );
+  const btnOutsideHit = btn ? await mpage.evaluate((b) => window.harness.hitIsAffordance(b.left + 3, b.top - 5), btn) : false;
+  assert(btnOutsideHit, "触区比图标大：贴着按钮外沿 5px 也算按到按钮（手指按不准）", "hit=" + btnOutsideHit);
+
+  // 单点按钮：打开的就是那张图（绝不能把按钮里的图标 svg 当成「图表」打开）
+  await tap(btn.left + btn.width / 2, btn.top + btn.height / 2);
+  await mpage.waitForTimeout(220);
+  const btnTap = await mpage.evaluate(() => ({ opens: window.harness.openLog(), edits: window.harness.editCount() }));
+  assert(
+    btnTap.opens.length === 1 && btnTap.opens[0] === "image:photo",
+    "手机点这个 icon → 打开的就是那张图（不是按钮里的图标，也不用去点图片本身）",
+    "打开 " + JSON.stringify(btnTap.opens)
+  );
+
+  // 连点两下按钮：第二次 tap 被吃掉 —— 不然宿主的「双击进编辑」会顺势触发
+  await mpage.evaluate(() => window.harness.clearGestureLogForTest());
+  await mpage.waitForTimeout(400); /* 让上一轮的 tap 计数过期，双击判定从零开始 */
+  const btn2 = await mpage.evaluate(() => window.harness.affordanceBoxFor("photo"));
+  await tap(btn2.left + btn2.width / 2, btn2.top + btn2.height / 2);
+  await mpage.waitForTimeout(80);
+  await tap(btn2.left + btn2.width / 2, btn2.top + btn2.height / 2);
+  await mpage.waitForTimeout(240);
+  const btnDouble = await mpage.evaluate(() => ({ opens: window.harness.openLog().length, edits: window.harness.editCount() }));
+  assert(
+    btnDouble.edits === 0,
+    "手机连点两下放大按钮也不会进编辑（按钮就在图的角上，手指稍偏就会点到它）",
+    "编辑触发 " + btnDouble.edits + " 次 · 打开 " + btnDouble.opens + " 次"
+  );
+  await mpage.evaluate(() => window.harness.detachAffordance());
+
   assert(mErrors.length === 0, "手机验证台无脚本错误", mErrors.slice(0, 2).join(" | ") || "无");
   assert(mrect.width > 0, "手机视口宽度有效（触摸坐标以视口为基准）", mrect.width + "px");
   void mBase;

@@ -255,10 +255,15 @@ export class ZoomPanLayer {
     this.zoomBy(target / this.t.scale, focal);
   }
 
-  /** 适配宽度：把内容整体缩进视口，并回到左上角留一点内边距。 */
-  fitWidth(padding: number = 16): void {
+  /**
+   * 适配宽度：把内容整体缩进视口，并回到左上角留一点内边距。
+   * maxScale 是【上限】而不是目标值：传 1 表示「装得下就原样放，装不下才缩」——
+   * 查看器用它保证打开时绝不会把图放大到超过原图分辨率（放大是插值，等于糊）。
+   */
+  fitWidth(padding: number = 16, maxScale?: number): void {
     const contentWidth = this.content.scrollWidth || this.content.offsetWidth;
-    const scale = fitScale(this.viewport.clientWidth - padding * 2, contentWidth, this.opts.minScale, this.opts.maxScale);
+    const limit = maxScale === undefined ? this.opts.maxScale : Math.min(maxScale, this.opts.maxScale);
+    const scale = fitScale(this.viewport.clientWidth - padding * 2, contentWidth, this.opts.minScale, limit);
     this.setTransform({ scale: scale, x: padding, y: padding });
   }
 

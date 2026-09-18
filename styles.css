@@ -195,13 +195,17 @@ body.is-mobile .zr-label {
   cursor: grabbing;
 }
 
+/* 刻意【不写】will-change: transform：
+ * 它会把这个画布提成一层合成层，并且只在「提层时的比例」上栅格化一次；
+ * 之后用户放大，浏览器只是把这张位图拉伸 —— 位图（图片）会软，CSS 画的文字
+ * （搬进来的图表标签）直接糊。用户的原话是「放大查看都模糊了」。
+ * 去掉之后浏览器会在新比例上重新栅格化，代价是缩放时多一点重绘，值得。 */
 .zr-lightbox-canvas {
   position: absolute;
   top: 0;
   left: 0;
   width: max-content;
   transform-origin: 0 0;
-  will-change: transform;
 }
 
 /* 放大后的图片/图表【不上色、不加边框、不加阴影、不加圆角】：
@@ -214,6 +218,11 @@ body.is-mobile .zr-label {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  /* 尺寸由 JS 按「1 源像素 = 1 设备像素」写成 px（见 src/lightbox.ts 的 nativePixelSize）。
+   * 主题与宿主都会给 img / svg 加 max-width: 100% —— 那会把刚摆好的 1:1 又压回去，
+   * 「高清」在窄屏上立刻失效。这两条必须解除。 */
+  max-width: none;
+  max-height: none;
 }
 
 /* --- 悬停放大按钮（图片 / 图表右上角）------------------------------------- */
@@ -282,10 +291,32 @@ body.is-mobile .zr-lightbox-label {
   opacity: 1;
 }
 
-/* 触屏没有悬停，轻点即可打开查看器，不需要常驻按钮占地方 */
+/* 触屏（没有悬停）：按钮必须【常驻、看得见、按得准】。
+ * 这里以前写的是 display: none，理由是「触屏轻点图片就能放大，按钮不必占地方」——
+ * 用户实测打回：「你应该展示放大的 icon，这样我就可以点击了，而不是依靠点击图片，
+ * 因为图片点击的时候可能点击到了背景上去了」。轻点图片这条入口保留，但按钮才是
+ * 明确的那一个：
+ *   · 不再隐藏，也不再靠悬停提亮 —— 触屏没有悬停，0.42 的不透明度等于看不见；
+ *   · 视觉 34px、手指按不准，就靠 ::after 外扩到 46px（大触区、小视觉，不遮内容）。 */
 @media (hover: none) {
   .zr-zoom-affordance-inline {
-    display: none;
+    width: 34px;
+    height: 34px;
+    opacity: 0.9;
+    border-radius: var(--radius-m, 6px);
+    /* 双击缩放由我们自己管，别让浏览器先等 300ms 判定 */
+    touch-action: manipulation;
+  }
+
+  .zr-zoom-affordance-inline svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .zr-zoom-affordance-inline::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
   }
 }
 /* ============================================================================

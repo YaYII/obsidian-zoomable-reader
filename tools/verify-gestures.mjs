@@ -348,6 +348,33 @@ try {
   const svgRestored = await lb.evaluate(() => window.lightboxHarness.diagramBackInPlace());
   assert(svgRestored, "关闭后图表放回原位", "inPlace=" + svgRestored);
 
+  /* ③b 高清（用户原话：「双击后的图片，不要压缩了，因为我双击就是需要高清的，
+   *     否则，放大查看都模糊了」）。两条硬要求：
+   *       · 画布不能带 will-change: transform —— 它把画面钉死在提层时的比例上，
+   *         之后放大只是把旧位图拉大（位图会软、CSS 文字会糊）；
+   *       · 打开查看器【绝不放大小图】：装得下就按 100% 放，放大是插值，等于糊。 */
+  await lb.evaluate(() => window.lightboxHarness.openImage());
+  await lb.waitForTimeout(200);
+  const willChange = await lb.evaluate(() => window.lightboxHarness.canvasWillChange());
+  assert(willChange !== "transform",
+    "查看器画布没有 will-change: transform（否则放大＝拉伸旧位图，越放越糊）",
+    "will-change=" + willChange);
+  const dProbe = await lb.evaluate(() => window.lightboxHarness.probe());
+  assert(!!dProbe && dProbe.cssWidth === 1600 && dProbe.maxWidth === "none",
+    "查看器里图片的排版尺寸 = 源图自然尺寸（桌面上 DPR=1，行为与从前一致）",
+    dProbe ? dProbe.cssWidth + "px · max-width=" + dProbe.maxWidth : "未打开");
+  await lb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await lb.waitForTimeout(120);
+
+  await lb.evaluate(() => window.lightboxHarness.openTiny());
+  await lb.waitForTimeout(220);
+  const tinyProbe = await lb.evaluate(() => window.lightboxHarness.probe());
+  assert(!!tinyProbe && tinyProbe.cssWidth === 200 && near(tinyProbe.scale, 1, 0.01),
+    "小图（200x80）打开时按 100% 放，不会被「适配」放大到糊",
+    tinyProbe ? "css=" + tinyProbe.cssWidth + "px scale=" + fmt(tinyProbe.scale) : "未打开");
+  await lb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await lb.waitForTimeout(120);
+
   /* ④ 其它插件画出来的 svg（只有 viewBox / width=100% / 固定像素）也必须能放大，
    *    而且不能再被 8 倍上限卡住（用户报的「其它 svg 放大失效」）。 */
   for (const svgId of ["svg-viewbox", "svg-percent", "svg-fixed"]) {
@@ -459,6 +486,43 @@ try {
   const mClosed = await mLb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), overlays: window.lightboxHarness.overlayCount() }));
   assert(!mClosed.open && mClosed.overlays === 0, "手机：关闭后浮层彻底移除", "overlays=" + mClosed.overlays);
   await mLb.screenshot({ path: path.join(OUT, "lightbox-mobile.png") });
+
+  /* ⑤ 手机：放大按钮必须自己看得见、按得准 —— 用户原话：
+   *    「你应该展示放大的 icon，这样我就可以点击了，而不是依靠点击图片，
+   *      因为图片点击的时候可能点击到了背景上去了」。 */
+  await mLb.evaluate(() => window.lightboxHarness.setPersistentMode());
+  await mLb.waitForTimeout(120);
+  const mBtn = await mLb.evaluate(() => window.lightboxHarness.affordanceBoxFor("photo"));
+  const mBtnVisible = await mLb.evaluate(() => window.lightboxHarness.affordanceVisibleFor("photo"));
+  assert(!!mBtn && mBtnVisible && mBtn.display !== "none" && Number(mBtn.opacity) >= 0.85,
+    "手机上放大按钮常驻可见（以前触屏是 display:none：用户看不到 icon，只能去点图）",
+    mBtn ? "display=" + mBtn.display + " opacity=" + mBtn.opacity + " " + Math.round(mBtn.width) + "x" + Math.round(mBtn.height) : "没有按钮");
+  const mOutsideHit = mBtn ? await mLb.evaluate((b) => window.lightboxHarness.hitIsAffordance(b.left + 3, b.top - 5), mBtn) : false;
+  assert(mOutsideHit, "触区比图标大：贴着按钮外沿 5px 也算按到按钮（手指按不准）", "hit=" + mOutsideHit);
+
+  if (mBtn) {
+    await mTouch("touchStart", [{ x: mBtn.left + mBtn.width / 2, y: mBtn.top + mBtn.height / 2 }]);
+    await mTouch("touchEnd", []);
+    await mLb.waitForTimeout(240);
+  }
+  const mBtnOpen = await mLb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), overlays: window.lightboxHarness.overlayCount() }));
+  assert(mBtnOpen.open && mBtnOpen.overlays === 1,
+    "手机：触摸这个 icon 就打开查看器（不必去点图片本身）", "overlays=" + mBtnOpen.overlays);
+
+  /* ⑥ 高清：1 源像素 = 1 设备像素（用户原话：双击就是要高清的，否则放大都模糊） */
+  const mProbe = await mLb.evaluate(() => window.lightboxHarness.probe());
+  assert(!!mProbe && Math.abs(mProbe.cssWidth - mProbe.naturalWidth / mProbe.dpr) <= 1.5,
+    "手机（DPR " + (mProbe ? mProbe.dpr : "?") + "）：查看器按 1 源像素 = 1 设备像素摆放",
+    mProbe ? "1600px 的图 → " + mProbe.cssWidth + " CSS px（旧版是 1600 CSS px，等于把位图横向拉伸 3 倍）" : "未打开");
+  await mLb.evaluate(() => window.lightboxHarness.setActualSize());
+  await mLb.waitForTimeout(180);
+  const mActual = await mLb.evaluate(() => window.lightboxHarness.probe());
+  assert(!!mActual && near(mActual.scale, 1, 0.01) && Math.abs(mActual.devicePixels - mActual.naturalWidth) <= 3,
+    "手机：100% 就是原图分辨率（一个源像素对一个物理像素，放大查看不再模糊）",
+    mActual ? "scale=" + fmt(mActual.scale) + " · 物理像素 " + mActual.devicePixels + " / 源 " + mActual.naturalWidth : "未打开");
+  await mLb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await mLb.waitForTimeout(120);
+
   assert(mLbErrors.length === 0, "查看器手机验证台无脚本错误", mLbErrors.slice(0, 2).join(" | ") || "无");
   await mLbCtx.close();
 

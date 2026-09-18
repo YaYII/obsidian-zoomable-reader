@@ -21,6 +21,9 @@
   #editArea { position: fixed; right: 0; top: 0; width: 160px; height: 90px; background: #f0f0ff; }
   #editArea img { width: 80px; }
 </style>
+<!-- 插件的真实样式表：Obsidian 里它就是加载在主题之后的。
+     验证「放大按钮在触屏上看得见、按得准」必须带上它 —— 只看 JS 是没有按钮样式的。 -->
+<link rel="stylesheet" href="../../styles.css" />
 </head>
 <body>
 <div class="markdown-reading-view" id="reading">
@@ -100,6 +103,42 @@ function installMobileGestures(options) {
 }
 function detachMobileGestures() { if (detachMobile) { detachMobile(); detachMobile = null; } }
 
+/* 常驻放大按钮：与插件里同一条代码路径（installZoomAffordance + persistent）。
+ * 手机上没有悬停，按钮必须自己看得见、按得准 —— 用户要的就是「我点这个 icon」。 */
+var detachAffordance = null;
+function installAffordance(corner) {
+  if (detachAffordance) { detachAffordance(); detachAffordance = null; }
+  detachAffordance = window.installZoomAffordance(document, {
+    images: true,
+    diagrams: true,
+    persistent: true,
+    corner: corner || "top-left",
+    label: "Zoom in",
+    onTarget: function (found) { openLog.push(found.kind + ":" + (found.element.id || "")); },
+  });
+  return function () { if (detachAffordance) { detachAffordance(); detachAffordance = null; } };
+}
+
+/** 按钮的渲染矩形（某个目标自己的那一个） */
+function affordanceBoxFor(id) {
+  var target = document.getElementById(id);
+  var host = target ? target.closest(".zr-zoom-host") : null;
+  var btn = host ? host.querySelector(".zr-zoom-affordance") : null;
+  if (!btn) return null;
+  var r = btn.getBoundingClientRect();
+  var cs = getComputedStyle(btn);
+  return {
+    left: r.left, top: r.top, width: r.width, height: r.height,
+    display: cs.display, visibility: cs.visibility, opacity: cs.opacity,
+  };
+}
+
+/** 浏览器自己的命中判定：这个坐标落在放大按钮（含 ::after 扩大的触区）上吗？ */
+function hitIsAffordance(x, y) {
+  var el = document.elementFromPoint(x, y);
+  return !!(el && el.closest && el.closest(".zr-zoom-affordance"));
+}
+
 function installStyle(options) {
   if (styleHandle) styleHandle.destroy();
   styleHandle = window.ReadingView.installStyle(document, options);
@@ -135,6 +174,10 @@ window.harness = {
   },
   installGestures: installGestures,
   installMobileGestures: installMobileGestures,
+  installAffordance: installAffordance,
+  detachAffordance: function () { if (detachAffordance) { detachAffordance(); detachAffordance = null; } },
+  affordanceBoxFor: affordanceBoxFor,
+  hitIsAffordance: hitIsAffordance,
   detachMobileGestures: detachMobileGestures,
   gestureLog: function () { return gestureLog.slice(); },
   clearGestureLogForTest: function () { gestureLog = []; openLog = []; },

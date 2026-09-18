@@ -23,6 +23,11 @@ import { findLightboxTarget, type LightboxTarget } from "./lightbox";
 
 const READING_VIEW = ".markdown-reading-view";
 
+/** 插件自己的放大按钮（常驻在图片/图表角上）。
+ *  点它是「按钮的事」：单击要能传到按钮自己的 click 上，也绝不能把按钮里的
+ *  图标 <svg> 当成一张图表打开（图标只有 18px，打开是个笑话）。 */
+const OWN_CONTROL = ".zr-zoom-affordance";
+
 export interface MobileReadingTapOptions {
   /** 只在移动端启用（桌面为 false → 不挂任何监听） */
   mobile: boolean;
@@ -73,6 +78,8 @@ function targetInReadingView(target: EventTarget | null): Element | null {
 }
 
 function zoomableTarget(element: Element, options: MobileReadingTapOptions): LightboxTarget | null {
+  /* 按钮自己不是图：它的图标是 <svg>，不排除就会「打开一张 18px 的图表」。 */
+  if (element.closest(OWN_CONTROL)) return null;
   if (options.images || options.diagrams) {
     const relaxed = findLightboxTarget(element, { images: options.images, diagrams: options.diagrams });
     if (relaxed) return relaxed;
@@ -171,6 +178,7 @@ export function installMobileReadingTaps(doc: Document, options: MobileReadingTa
     seen.add(event);
     const element = targetInReadingView(event.target);
     if (!element) return;
+
     const now = Date.now();
 
     /* 多指手势的第一步：标记并清掉 tap 状态 —— 捏合的 touchend 绝不能被当成单击 */
@@ -203,6 +211,11 @@ export function installMobileReadingTaps(doc: Document, options: MobileReadingTa
 
     /* 触摸设备的 tap 计数只认 touchend（pointerup/click 会重复计一次） */
     if (event.type !== "touchend") return;
+    /* 注意：落在【放大按钮】上的 tap 也要照常计数，不能提前 return ——
+     * 连点两下按钮时，第二次 tap 必须被吃掉（那是宿主的「双击进编辑」触发点，
+     * 而按钮就在图的角上，手指稍偏就会点到它：用户报过「双击还是进了编辑」）。
+     * 按钮自己则靠 zoomableTarget 排除 —— 它的图标是 <svg>，不排除就会被当成图表打开。
+     * 单击不受影响：我们只在【第二次 tap】时 consume，第一次照旧让浏览器派发 click。 */
     const touchEvent = event as TouchEvent;
     if (touchEvent.touches.length > 0) return; /* 还有手指没抬起来 */
     if (multiTouch) {

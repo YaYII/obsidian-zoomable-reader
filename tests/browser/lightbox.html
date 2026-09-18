@@ -18,6 +18,8 @@
 <div class="markdown-preview-view markdown-rendered" id="note">
   <p>验证台：点图片或图表即打开可缩放查看器。</p>
   <p><img id="photo" alt="测试图片" /></p>
+  <!-- 小图：用来验证「打开查看器绝不会把图放大」（放大 = 插值 = 糊） -->
+  <p><img id="tiny" alt="小图" /></p>
   <div class="mermaid" id="diagram-host">
     <svg id="diagram" viewBox="0 0 640 240" width="640" height="240" role="graphics-document">
       <rect x="2" y="2" width="636" height="236" rx="8" fill="none" stroke="#7a95ad"></rect>
@@ -69,6 +71,17 @@
     ctx.font = "48px sans-serif";
     ctx.fillText("1600 x 900 测试图", 100, 200);
     document.getElementById("photo").src = canvas.toDataURL("image/png");
+
+    /* 200x80 的小图：自然尺寸比视口窄，任何「适配」都不该把它放大 */
+    var small = document.createElement("canvas");
+    small.width = 200;
+    small.height = 80;
+    var sctx = small.getContext("2d");
+    sctx.fillStyle = "#fffdf7";
+    sctx.fillRect(0, 0, 200, 80);
+    sctx.fillStyle = "#a35b2f";
+    sctx.fillRect(10, 10, 180, 60);
+    document.getElementById("tiny").src = small.toDataURL("image/png");
   })();
 
   var lightbox = new window.ImageLightbox(document, { fitOnOpen: true, maxScale: 64 });
@@ -98,6 +111,11 @@
   }
   /* 默认走常驻模式（与插件默认一致） */
   installAffordance("persistent");
+  /* 模拟宿主：Obsidian 在阅读视图容器上听 dblclick（冒泡阶段）→ 进入编辑。
+   * 我们拦不住宿主的捕获监听，但按钮上的 dblclick 必须不冒泡到这里。 */
+  document.getElementById("note").addEventListener("dblclick", function () {
+    if (window.lightboxHarness) window.lightboxHarness.hostEdits++;
+  });
   window.lightboxHarness = {
     lightbox: lightbox,
     isOpen: function () { return lightbox.isOpen; },
@@ -200,7 +218,12 @@
       var btn = window.lightboxHarness.affordanceFor(id);
       if (!btn || btn.hidden) return null;
       var r = btn.getBoundingClientRect();
-      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+      var cs = getComputedStyle(btn);
+      return {
+        left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height,
+        /* 触屏上「看得见吗」要量这些：隐藏、透明、display:none 都是看不见 */
+        display: cs.display, visibility: cs.visibility, opacity: cs.opacity,
+      };
     },
     affordanceVisibleFor: function (id) {
       var btn = window.lightboxHarness.affordanceFor(id);
@@ -220,6 +243,48 @@
       var buttons = document.querySelectorAll(".zr-lightbox-btn");
       for (var i = 0; i < buttons.length; i++) {
         if (buttons[i].getAttribute("title") === title) { buttons[i].click(); return true; }
+      }
+      return false;
+    },
+    /* 高清读数：探针的 CSS 尺寸必须 = 自然尺寸 / devicePixelRatio ——
+     * 这样「100%」才等于原图分辨率（1 源像素 = 1 设备像素）。 */
+    probe: function () {
+      var el = document.querySelector(".zr-lightbox-image");
+      if (!el) return null;
+      var r = el.getBoundingClientRect();
+      var t = window.lightboxHarness.transform();
+      return {
+        naturalWidth: el.naturalWidth,
+        naturalHeight: el.naturalHeight,
+        /* 排版尺寸用 offsetWidth（不受祖先 transform 影响）；
+         * getBoundingClientRect 会把缩放算进去，拿它当「图片的 CSS 尺寸」会算重。 */
+        cssWidth: el.offsetWidth,
+        cssHeight: el.offsetHeight,
+        rectWidth: r.width,
+        maxWidth: getComputedStyle(el).maxWidth,
+        dpr: window.devicePixelRatio,
+        scale: t ? t.scale : 0,
+        /* 屏幕上真正的物理像素数 = 排版尺寸 × 比例 × DPR（= 自然尺寸 × 比例） */
+        devicePixels: Math.round(el.offsetWidth * (t ? t.scale : 0) * window.devicePixelRatio),
+      };
+    },
+    /* 缩放时浏览器会不会重新栅格化：will-change: transform 会把它钉死在旧比例上 */
+    canvasWillChange: function () {
+      var c = document.querySelector(".zr-lightbox-canvas");
+      return c ? getComputedStyle(c).willChange : null;
+    },
+    /** 浏览器自己的命中判定：这个坐标落在放大按钮（含 ::after 扩大的触区）上吗 */
+    hitIsAffordance: function (x, y) {
+      var el = document.elementFromPoint(x, y);
+      return !!(el && el.closest && el.closest(".zr-zoom-affordance"));
+    },
+    /** 宿主（Obsidian 阅读视图）收到的「双击」次数：模拟「双击进编辑」 */
+    hostEdits: 0,
+    openTiny: function () { lightbox.openImage(document.getElementById("tiny")); },
+    setActualSize: function () {
+      var buttons = document.querySelectorAll(".zr-lightbox-btn");
+      for (var i = 0; i < buttons.length; i++) {
+        if (buttons[i].getAttribute("title") === "Actual size (100%)") { buttons[i].click(); return true; }
       }
       return false;
     },

@@ -29,6 +29,11 @@ columns, just a wide sheet of paper you read downwards.
   （打「双指」或 pinch 都能直接跳到那一项）。
 - **放大按钮默认在左上角**：右上角是 Obsidian 自己的「编辑源文件 / 更多选项」入口，按钮贴在那儿
   会把它盖住。想放回右上角：设置 → 图片与图表查看器 → 放大按钮的位置。
+- **手机上也看得见这个放大按钮**：触屏没有悬停，所以它常驻显示、不再靠鼠标指到才亮（视觉 34px，
+  触区约 46px —— 手指按不准也点得到）。**点这个 icon 就放大，不必去点图片本身**（图片边缘容易点空）。
+- **放大查看就是高清**：查看器按「1 个源像素 = 1 个设备像素」摆放 —— 读数显示 100% 时，你看到的就是
+  原图分辨率（DPR 3 的手机上，一张 1600px 的截图摆成约 533 CSS px，而不是 1600 CSS px）。
+  打开时也不会为了「适配」把小图拉大：放大是插值，插值就是糊。
 
 ## Why this exists
 
@@ -71,6 +76,16 @@ Notes:
   in this plugin's own `data.json` inside your vault.
 - The view is a board, so dragging pans instead of selecting text. Use the normal reading view
   when you need to select or edit text.
+- **The zoom button is always visible, on touch too.** In 1.3.9 and earlier it was hidden entirely on
+  touch devices (`@media (hover: none) { display: none }`) in favour of "just tap the image" — which
+  meant tapping near an image edge often missed. It is now 34 px visually with a ~46 px tap area, and
+  tapping it opens the viewer for that image or diagram (tapping the image still works).
+- **The viewer shows images at their real resolution.** The probe is laid out at
+  `naturalWidth / devicePixelRatio`, so **100 % is 1 source pixel = 1 device pixel** — on a 3× phone
+  a 1600 px screenshot sits at ~533 CSS px instead of being stretched over 4800 physical pixels.
+  Opening a small image never upscales it (fit is capped at 100 %), and the canvas no longer carries
+  `will-change: transform`, which used to pin the rasterization scale and turn zooming into bitmap
+  stretching.
 
 ## Whiteboard mode: one 1280 px page
 
