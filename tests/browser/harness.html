@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Zoomable Reader · 手势验证台</title>
+<style>
+  /* 与 styles.css 保持一致（这里复制一份，验证台不依赖打包后的插件样式） */
+  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+  .zr-root { display: flex; flex-direction: column; height: 100%; }
+  .zr-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid #ddd; background: #f4f4f4; }
+  .zr-label { min-width: 60px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .zr-viewport { position: relative; flex: 1 1 auto; overflow: hidden; background: #eceff1; cursor: grab; touch-action: none; overscroll-behavior: contain; }
+  .zr-canvas { position: absolute; top: 0; left: 0; width: max-content; transform-origin: 0 0; will-change: transform; }
+  .zr-page { width: 800px; margin: 0; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .zr-page p { margin: 12px; line-height: 1.7; }
+  .zr-page a { display: inline-block; margin: 12px; }
+  .wide { width: 1600px; height: 40px; background: #cfd8dc; }
+</style>
+</head>
+<body>
+<div class="zr-root">
+  <div class="zr-toolbar"><span class="zr-label" id="label">100%</span><span id="commits">0</span></div>
+  <div class="zr-viewport" id="viewport">
+    <div class="zr-canvas" id="canvas">
+      <div class="markdown-preview-view markdown-rendered zr-page" id="page">
+        <p>验证台正文：拖动平移，Ctrl+滚轮缩放，触屏可双指捏合。</p>
+        <p><a href="#" id="link">一个链接</a></p>
+        <div class="wide" id="wide"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="out/zoom-pan.js"></script>
+<script>
+  var viewport = document.getElementById("viewport");
+  var canvas = document.getElementById("canvas");
+  var label = document.getElementById("label");
+  var commits = 0;
+  var linkClicks = 0;
+  var layer = new window.ZoomPanLayer(viewport, canvas, {
+    onCommit: function (t) {
+      commits += 1;
+      document.getElementById("commits").textContent = String(commits);
+      label.textContent = window.ZoomPanFormat.percent(t.scale);
+    }
+  });
+  document.getElementById("link").addEventListener("click", function () { linkClicks += 1; });
+  window.harness = {
+    layer: layer,
+    get commits() { return commits; },
+    get linkClicks() { return linkClicks; },
+    state: function () { return layer.transform; },
+    rect: function () { var r = viewport.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; },
+    /* 视口坐标 (px,py) 对应内容坐标系里的点：缩放前后应当一致 */
+    contentPoint: function (px, py) { var t = layer.transform; return { x: (px - t.x) / t.scale, y: (py - t.y) / t.scale }; }
+  };
+</script>
+</body>
+</html>

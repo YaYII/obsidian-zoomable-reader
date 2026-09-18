@@ -1,0 +1,69 @@
+name: Release Obsidian plugin
+
+# 官方推荐流程（docs.obsidian.md → Release your plugin with GitHub Actions）：
+#   push 与 manifest.version 同名的 tag → 构建 → 生成构建溯源证明 → 创建 release 并附上三件套。
+# 与官方模板的两处差异，都写在明面上：
+#   ① 先校验 tag 与 manifest.json 的 version 完全一致 —— 不一致时用户装不上，
+#      而且「release 里没有附件」是社区目录最常见的拒绝原因之一；
+#   ② 不用 draft：草稿 release 在用户与目录扫描器眼里都不存在。
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Check tag matches manifest version
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          version="$(node -p "require('./manifest.json').version")"
+          echo "tag=$tag version=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag ($tag) does not match manifest.json version ($version)"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck and unit tests
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          gh release create "$tag" \
+            --title="$tag" \
+            --notes-file CHANGELOG.md \
+            main.js manifest.json styles.css

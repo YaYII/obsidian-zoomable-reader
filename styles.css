@@ -1,0 +1,108 @@
+/* ============================================================================
+ * Zoomable Reader · 视图样式
+ * ---------------------------------------------------------------------------
+ * 全部使用 Obsidian 的公开 CSS 变量，因此跟随任何主题的配色与圆角；
+ * 页面容器同时带 markdown-preview-view / markdown-rendered 两个类，
+ * 于是主题的正文排版（字体、行高、首行缩进、表格、代码块）原样生效。
+ * ========================================================================== */
+
+.zr-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* --- 工具条 ---------------------------------------------------------------- */
+.zr-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+}
+
+.zr-btn,
+.zr-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.zr-btn:hover,
+.zr-label:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.zr-label {
+  min-width: 60px;
+  font-size: var(--font-ui-small, 13px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 画布与页面 ------------------------------------------------------------ */
+.zr-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  background-color: var(--background-secondary);
+  cursor: grab;
+  /* 手势全部由插件处理：关掉浏览器的原生触摸行为，否则手机上会与页面滚动打架 */
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.zr-viewport:active {
+  cursor: grabbing;
+}
+
+.zr-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  transform-origin: 0 0;
+}
+
+.zr-page {
+  margin: 0;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m, 8px);
+  box-shadow: var(--shadow-s, 0 1px 3px rgba(0, 0, 0, 0.12));
+}
+
+/* 缩放由本视图负责，所以宽内容一律先收进版心，再让用户放大看细节 ——
+ * 与「没有缩放能力的阅读视图」相反（那里需要保持原尺寸 + 横向滑动）。
+ * 主题可能用更高特异性把 svg 设成 max-width: none，故此处必须 !important。 */
+.zr-page .mermaid svg,
+.zr-page img,
+.zr-page video,
+.zr-page embed,
+.zr-page canvas {
+  max-width: 100% !important;
+  height: auto;
+}
+
+.zr-page .mermaid {
+  overflow-x: auto;
+}
+
+/* 手机上把工具条的点击区域放大到便于拇指操作 */
+body.is-mobile .zr-btn,
+body.is-mobile .zr-label {
+  min-width: 40px;
+  height: 40px;
+}

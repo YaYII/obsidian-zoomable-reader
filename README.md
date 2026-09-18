@@ -1,0 +1,109 @@
+# Zoomable Reader
+
+> 把任何一篇笔记放进一块可以平移、可以缩放的白板里读 —— 手机上双指捏合，桌面按 Ctrl 滚轮，拖动即平移。
+
+Read any note on a pan-and-zoom board: pinch on mobile, Ctrl and wheel on desktop, drag to pan.
+Handy for wide diagrams, tables and screenshots that are unreadable at 100% in the reading view.
+
+[![License](https://img.shields.io/badge/license-MIT-7159a3)](LICENSE)
+
+## Why this exists
+
+Obsidian's reading view cannot be pinch-zoomed on mobile, and no theme can change that: the app
+runs in a WebView whose zoom is a native, app-level switch (Capacitor's `zoomEnabled`, off by
+default), plus a `user-scalable=no` viewport declaration. CSS cannot reach either one.
+
+A plugin can. Zoomable Reader opens the note in its own view, renders the Markdown into a
+transformable layer, and handles the gestures itself — so pinch-to-zoom finally works on a phone,
+and wide diagrams or screenshots can be read by zooming in instead of squinting.
+
+## Usage
+
+1. Open a note, then run **Zoomable Reader: Open the active note** from the command palette, or
+   click the **zoom-in icon** in the ribbon. Note: run the command name exactly as shown; the
+   ribbon icon does the same thing.
+2. Gestures:
+   - **Mobile** — one finger drags (pan), two fingers pinch (zoom), double-tap toggles 100% / 200%.
+   - **Desktop** — drag to pan, **Ctrl or Cmd and wheel** to zoom at the pointer, wheel to pan,
+     double-click toggles 100% / 200%.
+   - Keyboard: `+` / `-` / `0` (zoom in, zoom out, reset).
+3. The toolbar has zoom out, the current zoom level (click it to reset), zoom in and fit width.
+
+Notes:
+
+- The note's column width follows your theme (`--file-line-width`), and on a phone it never
+  exceeds the viewport — so 100% is already "one screen wide", and zooming only ever magnifies.
+- Zoom and position can be remembered per note. They are stored in this plugin's own
+  `data.json` inside your vault.
+- The view is a board, so dragging pans instead of selecting text. Use the normal reading view
+  when you need to select or edit text.
+
+## Privacy and disclosures
+
+- **No network access.** This plugin makes no HTTP requests and loads no remote assets.
+- **No telemetry.** Nothing is collected, and nothing leaves your device.
+- **No access outside your vault.** The plugin only reads notes through Obsidian's own vault API.
+- The only data it writes is `data.json` in this plugin's folder (your zoom levels and positions).
+- No ads, no accounts, no payment.
+
+## Settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| Remember zoom and position per note | on | Restores the zoom, pan and position next time you open that note |
+| Double-tap zoom | 2x | How far a double-click or double-tap zooms in |
+| Maximum zoom | 8x | Upper limit for pinch and wheel zoom |
+| Show toolbar | on | Zoom buttons and the zoom label |
+| Page padding | 16px | Gap between the note and the edge of the view |
+| Clear saved zoom and positions | — | Forgets every note's saved zoom |
+
+## Installation
+
+**From the community directory** (after this plugin is published): Settings → Community plugins →
+Browse → search for "Zoomable Reader".
+
+**Manually**
+1. Download `main.js`, `manifest.json` and `styles.css` from the [latest release](../../releases/latest).
+2. Put them in `<your vault>/.obsidian/plugins/zoomable-reader/`.
+3. Enable **Zoomable Reader** in Settings → Community plugins.
+
+## Development
+
+```bash
+npm install
+npm run dev            # esbuild watch → main.js
+npm run typecheck      # tsc --noEmit
+npm test               # vitest: zoom math + repo contract tests
+npm run verify:gestures # real Chromium: wheel, Ctrl+wheel, drag, pinch, double-tap
+npm run build          # production bundle
+```
+
+The gesture layer is verified with real events, not by reading code: `npm run verify:gestures`
+drives a real Chromium with `mouse.wheel`, pointer drags and CDP-synthesised touch events
+(one-finger pan, two-finger pinch, double-tap), and asserts the anchor invariant — the content
+under your finger must not move while zooming.
+
+Repository layout:
+
+```
+main.ts               plugin entry: view registration, commands, ribbon, settings storage
+src/zoom-pan.ts       zoom math (pure functions) + ZoomPanLayer (pointer gestures)
+src/view.ts           the ItemView: renders Markdown into a transformable board
+src/settings.ts       settings model and the settings tab
+styles.css            view styles, using Obsidian CSS variables only
+tests/                vitest suites + the browser gesture harness
+tools/                the Playwright gesture verifier
+```
+
+## Compatibility
+
+- Obsidian **1.5.7** or newer (uses `MarkdownRenderer.render` and `View.scope` for the keyboard shortcuts).
+- Desktop and mobile. No Node.js or Electron APIs are used, hence `isDesktopOnly: false`.
+- Works with any theme: the note is rendered with your theme's styles, and the board itself uses
+  Obsidian's public CSS variables.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+If this plugin saves you some squinting, you can [support its development](SPONSOR.md).
