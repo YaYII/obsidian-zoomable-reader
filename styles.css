@@ -100,6 +100,18 @@
   overflow-x: auto;
 }
 
+/* 图表也按版面宽度等比显示：主题常把 useMaxWidth 设为 false（框随文字走的前提），
+ * svg 会按自然宽度渲染，于是在窄版心里要么溢出、要么比正文窄一截。
+ * 矢量的东西等比缩放即可，放大看细节交给查看器。 */
+.zr-page .mermaid svg,
+.zr-page .block-language-mermaid svg,
+.zr-page .excalidraw-svg svg,
+.zr-page .block-language-chart svg {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
 /* 手机上把工具条的点击区域放大到便于拇指操作 */
 body.is-mobile .zr-btn,
 body.is-mobile .zr-label {

@@ -72,6 +72,24 @@ export function readingCss(options: ReadingViewOptions): string {
     rules.push(READING_VIEW_SELECTOR + " { zoom: " + zoom + "; }");
   }
 
+  const diagramTargets = [
+    READING_VIEW_SELECTOR + " .mermaid svg",
+    READING_VIEW_SELECTOR + " .block-language-mermaid svg",
+    READING_VIEW_SELECTOR + " .excalidraw-svg svg",
+    READING_VIEW_SELECTOR + " .block-language-chart svg",
+    READING_VIEW_SELECTOR + " .block-language-chart canvas",
+  ].join(",\n");
+
+  /* 图表（Mermaid 流程图等）：默认也【撑满版心】。
+   * 为什么必须显式写：主题常把 flowchart.useMaxWidth 设成 false（框随文字走的前提），
+   * 于是 svg 会按自己的自然宽度渲染 —— 在手机上就是「超出屏幕」或者「比正文窄一截」。
+   * 按版心宽度等比缩放（SVG 是矢量的，字跟着一起缩放，放大看细节交给查看器）。 */
+  if (options.imageWidth === "fill") {
+    rules.push(diagramTargets + " {\n  width: 100% !important;\n  max-width: 100% !important;\n  height: auto !important;\n}");
+  } else if (options.imageWidth === "contain") {
+    rules.push(diagramTargets + " {\n  max-width: 100% !important;\n  height: auto !important;\n}");
+  }
+
   /* 图片：默认【撑满版心】——按版心宽度等比放大，高度自动，绝不拉伸变形。
    * 显式写了宽度的图片（![[x.png|300]]）也被统一到版心宽度：用户要的是
    * 「严格按照插件约束的宽度显示」，不是每张图各说各话。

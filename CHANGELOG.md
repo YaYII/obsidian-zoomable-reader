@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.9
+
+- **Fixed: flow charts (and every other diagram) ignored the line width.** 1.3.7's width rules only
+  targeted `img` and `video`, but a Mermaid flow chart is an `<svg>` — and themes set
+  `flowchart.useMaxWidth: false` (that is what makes boxes follow the text), so Mermaid renders at
+  its **natural width** and the diagram stayed at 478 px inside a 900 px column, or overflowed on a
+  phone. The rules now cover `.mermaid svg`, `.block-language-mermaid svg`,
+  `.excalidraw-svg svg` and `.block-language-chart svg`/`canvas` as well, and the plugin's own
+  view got the same treatment in `styles.css`.
+- Scaling is by ratio (SVG is vector, so the text scales with it): measured in a real browser, a
+  478 × 98 diagram becomes **900 × 184** with the 478:98 ratio intact, and on a 390 px phone viewport
+  both the diagram and a photo land at 342 px — one screen wide, as asked. Double-tap still opens the
+  zoomable viewer, which is where detail reading now happens.
+- The setting is now called **阅读视图图片/图表宽度** (it always governed both, the label just lied).
+
+Verification: `npm run verify:reading` is now **32 assertions** — the new ones measure the diagram in
+the DOM: fill → 900 px with the aspect ratio preserved, contain → stays 478 px, and on a phone
+viewport the diagram and the photo are both clamped to the same screen width.
+
 ## 1.3.8
 
 - **Fixed: double tapping still opened the editor.** 1.3.7 only intercepted double taps **on images**,

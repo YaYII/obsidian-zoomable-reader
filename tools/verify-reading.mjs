@@ -173,6 +173,26 @@ try {
   const naturalState = await page.evaluate(() => ({ box: window.harness.imageBox("photo"), css: window.harness.state().styleText }));
   assert(!naturalState.css.includes("img") && near(naturalState.box.width, 600, 2), "natural：不注入图片规则，完全交给主题", fmt(naturalState.box.width) + "px · 含 img 规则=" + naturalState.css.includes("img"));
 
+  /* ⑦-2 流程图（svg）：主题让 Mermaid 按自然尺寸渲染，插件必须把它拉回版心宽度 */
+  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" }));
+  await page.waitForTimeout(60);
+  const diagramFill = await page.evaluate(() => window.harness.imageBox("diagram"));
+  assert(
+    near(diagramFill.width, 900, 2),
+    "fill：流程图按版心宽度显示（自然 478px → 900px），不再按图片原有宽度",
+    fmt(diagramFill.width) + "px"
+  );
+  const diagramRatio = diagramFill.width / diagramFill.height;
+  assert(near(diagramRatio, 478 / 98, 0.05), "fill：流程图等比缩放，不变形（478:98 的比例保持）", "比例 " + fmt(diagramRatio) + "（期望 " + fmt(478 / 98) + "）");
+
+  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "contain" }));
+  await page.waitForTimeout(60);
+  const diagramContain = await page.evaluate(() => window.harness.imageBox("diagram"));
+  assert(near(diagramContain.width, 478, 2), "contain：流程图不放大（仍是自然宽度 478px）", fmt(diagramContain.width) + "px");
+
+  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" }));
+  await page.waitForTimeout(40);
+
   /* ⑧ 手机版才管的双击：桌面（mobile:false）不插手，双击图片照旧是「编辑」 */
   await page.evaluate(() => {
     window.harness.installMobileGestures({ mobile: false });
@@ -324,6 +344,21 @@ try {
     outsideLog.opens === 0 && outsideLog.hits === 0,
     "阅读视图之外的图片不接管（模拟的编辑区里双击照旧，不进我们的查看器）",
     "打开 " + outsideLog.opens + " 次 · 命中 " + outsideLog.hits + " 次"
+  );
+
+  /* ⑪ 手机：流程图与图片都按【手机上的宽度】显示（用户就是在这个尺寸下读的） */
+  await mpage.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" }));
+  await mpage.waitForTimeout(80);
+  const mobileBoxes = await mpage.evaluate(() => ({
+    reading: window.harness.rect().width,
+    diagram: window.harness.imageBox("diagram").width,
+    photo: window.harness.imageBox("photo").width,
+  }));
+  const contentWidth = Math.max(mobileBoxes.diagram, mobileBoxes.photo);
+  assert(
+    contentWidth <= mobileBoxes.reading + 1 && near(mobileBoxes.diagram, mobileBoxes.photo, 2),
+    "手机：流程图与图片都被压到同一屏宽（等比缩小到可用宽度，不再溢出或比正文窄）",
+    "屏宽 " + fmt(mobileBoxes.reading) + " · 图 " + fmt(mobileBoxes.diagram) + " · 照片 " + fmt(mobileBoxes.photo)
   );
 
   assert(mErrors.length === 0, "手机验证台无脚本错误", mErrors.slice(0, 2).join(" | ") || "无");

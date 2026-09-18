@@ -89,10 +89,10 @@ describe("图片宽度策略：严格按版心宽度等比放大", () => {
     expect(css).toContain("object-fit: contain;");
   });
 
-  it("fill 用精确的 width:100%（不是 max-width 那种子串）—— 于是显式写死宽度的图片也被统一", () => {
+  it("fill 用精确的 width:100%（不是 max-width 那种子串）—— 图片与图表各一条", () => {
     const css = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "fill" });
     const exact = css.split("\n").filter((line) => line.trim() === "width: 100% !important;");
-    expect(exact).toHaveLength(1);
+    expect(exact).toHaveLength(2); /* 一条给图片/视频，一条给图表 */
   });
 
   it("contain：只保证不溢出（max-width），不放大", () => {
@@ -105,6 +105,34 @@ describe("图片宽度策略：严格按版心宽度等比放大", () => {
   it("natural：一个字节都不注入（完全交给主题）", () => {
     const css = readingCss({ lineWidth: "theme", zoom: 1, gestures: false, imageWidth: "natural" });
     expect(css).toBe("");
+  });
+
+  it("fill 也管流程图：Mermaid / Excalidraw / charts 的 svg 都按版心宽度等比显示", () => {
+    const css = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "fill" });
+    for (const selector of [".mermaid svg", ".excalidraw-svg svg", ".block-language-chart svg"]) {
+      expect(css).toContain(selector);
+    }
+    /* 选择器成组出现，属性在随后的行里 —— 分别断言，不要假设同一行 */
+    expect(css).toContain(".mermaid svg");
+    expect(css).toContain("width: 100% !important;");
+    expect(css).toContain("height: auto !important;");
+  });
+
+  it("contain 对图表只限宽不放大；natural 一个字节都不注入", () => {
+    const contain = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "contain" });
+    expect(contain).toContain(".mermaid svg");
+    const exactFill = contain.split("\n").filter((line) => line.trim() === "width: 100% !important;");
+    expect(exactFill).toHaveLength(0);
+    const natural = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "natural" });
+    expect(natural).not.toContain("mermaid");
+  });
+
+  it("图表规则同样只在阅读视图内（不影响编辑模式与其它插件）", () => {
+    const css = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "fill" });
+    for (const line of css.split("\n")) {
+      if (!line.includes("mermaid") && !line.includes("excalidraw") && !line.includes("block-language")) continue;
+      expect(line.startsWith(".markdown-reading-view"), line).toBe(true);
+    }
   });
 
   it("图片规则只在阅读视图内（编辑模式与其它视图不受影响）", () => {

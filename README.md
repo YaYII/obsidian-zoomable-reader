@@ -112,10 +112,12 @@ properties** of it and leaves your theme files untouched:
   two-finger pinches and Ctrl+wheel are intercepted — one-finger scrolling, taps and the plain wheel
   stay with Obsidian. Pinches outside the reading view are ignored, and switching the gesture setting
   off removes the listener entirely.
-- **Images fill the line width** (default) and are scaled keeping their aspect ratio — no cropping,
-  no stretching, and an explicit `![[image.png|300]]` is normalised to the line width too, so a
-  page never mixes three different image widths. Switch it to *fit within the line width* or
-  *natural size* if you prefer the old behaviour.
+- **Images *and diagrams* fill the line width** (default) and are scaled keeping their aspect ratio —
+  no cropping, no stretching, and an explicit `![[image.png|300]]` is normalised too. Diagrams matter
+  as much as photos here: themes set `flowchart.useMaxWidth: false` (so boxes follow the text), which
+  makes Mermaid render at its natural width; the plugin pulls it back to the line width, so on a
+  phone a flow chart is one screen wide and double-tap opens it for detail. Switch the policy to
+  *fit within the line width* or *natural size* if you prefer the old behaviour.
 - **Mobile: double tapping no longer opens the editor — anywhere in the reading view.** Obsidian's
   reading view uses a double tap to enter editing, which is the easiest gesture to trigger by
   accident while reading, so the plugin intercepts it across the whole reading view (text as well as
@@ -153,7 +155,7 @@ Obsidian 1.13+ **settings search** — typing 双指 or pinch jumps straight to 
 | 阅读视图版心宽度 / Reading view line width | 900 px | Obsidian's own reading view; 跟随主题 injects nothing |
 | 阅读视图缩放 / Reading view zoom | 100% | Reflows (text grows, line width unchanged); pinch or Ctrl+wheel |
 | 阅读视图手势缩放 / Reading view zoom gestures | on | Pinch inside the reading view / Ctrl+wheel; the plain wheel and one-finger scroll are untouched |
-| 阅读视图图片宽度 / Reading view image width | 撑满版心 fill | Scale images to the line width keeping the ratio; or fit-within / natural size |
+| 阅读视图图片/图表宽度 / Image & diagram width | 撑满版心 fill | Scale images and diagrams (Mermaid/Excalidraw/charts) to the line width; or fit-within / natural |
 | 手机：双击不进编辑 / Mobile: double tap does not open the editor | on | Anywhere in the reading view (text and images). Use the menu button to edit |
 | 手机：双击图片 = 放大查看 / Mobile: double-tap an image to zoom | on | Opens the zoomable viewer from an image or diagram |
 | 手机：双击自检 / Mobile: double-tap self-check | off | Shows a notice for every intercepted double tap (diagnostics) |
