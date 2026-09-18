@@ -27,6 +27,30 @@
     </svg>
   </div>
 </div>
+
+  <!-- 其它插件常见的三种 svg：只有 viewBox / width=100% / 固定像素。
+       它们最容易「放不大」——尺寸由 CSS 或父容器决定，进查看器后自身尺寸成循环依赖。 -->
+  <div class="markdown-rendered" id="svg-variants">
+    <div class="block-language-chart" id="host-viewbox">
+      <svg id="svg-viewbox" viewBox="0 0 1200 400" role="img">
+        <rect x="10" y="10" width="1180" height="380" rx="10" fill="none" stroke="#7a95ad"></rect>
+        <text x="40" y="200" font-size="42" fill="#2f4a63">只有 viewBox 的图</text>
+      </svg>
+    </div>
+    <div id="host-percent">
+      <svg id="svg-percent" viewBox="0 0 900 300" width="100%" height="200">
+        <rect x="6" y="6" width="888" height="288" rx="10" fill="none" stroke="#7a95ad"></rect>
+        <text x="30" y="160" font-size="36" fill="#2f4a63">width=100% 的图</text>
+      </svg>
+    </div>
+    <div id="host-fixed">
+      <svg id="svg-fixed" width="1600" height="300" viewBox="0 0 1600 300">
+        <rect x="6" y="6" width="1588" height="288" rx="10" fill="none" stroke="#7a95ad"></rect>
+        <text x="30" y="160" font-size="40" fill="#2f4a63">固定像素的宽图</text>
+      </svg>
+    </div>
+  </div>
+
 <script src="out/zoom-pan.js"></script>
 <script>
   /* 图片用 canvas 现场生成（1600x900 的自然尺寸），避免依赖任何外部文件 */
@@ -45,16 +69,25 @@
     document.getElementById("photo").src = canvas.toDataURL("image/png");
   })();
 
-  var lightbox = new window.ImageLightbox(document, { fitOnOpen: true, maxScale: 8 });
-  /* 与插件里同一条代码路径：真实的点击委派（判定 + 打开） */
-  window.lightboxHarnessDetach = window.ImageLightboxClicks(document, {
-    images: true,
-    diagrams: true,
-    onTarget: function (found) {
-      if (found.kind === "image") lightbox.openImage(found.element);
-      else lightbox.openNode(found.element, { title: "Mermaid diagram" });
-    }
-  });
+  var lightbox = new window.ImageLightbox(document, { fitOnOpen: true, maxScale: 64 });
+  /* 与插件里同一条代码路径：悬停按钮 + 点击委派。
+     forceHover=true 让无头浏览器也能走「桌面悬停」分支；
+     setTouchMode() 换回真实触屏的判定（matchMedia('(hover: hover)') 为假 → 轻点即开）。 */
+  function installAffordance(forceHover) {
+    if (window.lightboxHarnessDetach) window.lightboxHarnessDetach();
+    window.lightboxHarnessDetach = window.installZoomAffordance(document, {
+      images: true,
+      diagrams: true,
+      forceHover: forceHover,
+      clickToOpen: false,
+      label: "Zoom in",
+      onTarget: function (found) {
+        if (found.kind === "image") lightbox.openImage(found.element);
+        else lightbox.openNode(found.element, { title: "Mermaid diagram" });
+      }
+    });
+  }
+  installAffordance(true);
   window.lightboxHarness = {
     lightbox: lightbox,
     isOpen: function () { return lightbox.isOpen; },
@@ -84,6 +117,30 @@
       var host = document.getElementById("diagram-host");
       return !!(svg && host && svg.parentElement === host);
     },
+    affordance: function () { return document.querySelector(".zr-zoom-affordance"); },
+    affordanceBox: function () {
+      var el = document.querySelector(".zr-zoom-affordance");
+      if (!el || el.hidden) return null;
+      var r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    },
+    affordanceVisible: function () {
+      var el = document.querySelector(".zr-zoom-affordance");
+      return !!(el && !el.hidden);
+    },
+    contentStyle: function () {
+      var el = document.querySelector(".zr-lightbox-image, .zr-lightbox-node svg");
+      if (!el) return null;
+      var cs = getComputedStyle(el);
+      return {
+        background: cs.backgroundColor,
+        borderWidth: cs.borderTopWidth,
+        boxShadow: cs.boxShadow,
+        borderRadius: cs.borderTopLeftRadius,
+      };
+    },
+    setTouchMode: function () { installAffordance(false); },
+    setDesktopMode: function () { installAffordance(true); },
     openImage: function () { lightbox.openImage(document.getElementById("photo")); },
     openDiagram: function () { lightbox.openNode(document.getElementById("diagram"), { title: "Mermaid diagram" }); },
     clickToolbar: function (title) {

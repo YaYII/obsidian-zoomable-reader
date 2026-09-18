@@ -75,19 +75,49 @@ export class ImageLightbox {
   /** 打开一个图表：把原来的节点搬进查看器，关闭时放回原位（保住 #id 作用域样式）。 */
   openNode(node: Element, meta?: { title?: string }): void {
     if (!node.parentNode) return;
+
+    /* ⚠ 尺寸必须在【搬移之前】量：节点一旦脱离文档，getBBox() 与
+     * getBoundingClientRect() 在 Chromium 里都返回 0 —— 实测踩到过：
+     * 钉尺寸那段代码永远拿不到宽高，于是「其它 svg 放大失效」照旧。
+     * 现在先量、先钉，再搬。 */
+    if (node instanceof SVGGraphicsElement) {
+      let width = 0;
+      let height = 0;
+      try {
+        const box = node.getBBox();
+        width = box.width;
+        height = box.height;
+      } catch {
+        /* 某些渲染器下 getBBox 会抛，退回下面的 rect */
+      }
+      if (!width || !height) {
+        const rect = node.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+      }
+      this.naturalWidth = Math.round(width);
+      this.naturalHeight = Math.round(height);
+      /* 把 svg 的尺寸钉成像素：别的插件画出来的 svg 常常只有 viewBox 或
+       * width="100%"，放进 width: max-content 的画布后自身尺寸成循环依赖，
+       * 表现就是「适配顶到上限、再放大没反应」。 */
+      if (width > 0 && height > 0) {
+        const style = (node as unknown as { style?: CSSStyleDeclaration }).style;
+        if (style) {
+          style.width = Math.round(width) + "px";
+          style.height = Math.round(height) + "px";
+          style.maxWidth = "none";
+        }
+      }
+    } else {
+      const rect = node.getBoundingClientRect();
+      this.naturalWidth = Math.round(rect.width);
+      this.naturalHeight = Math.round(rect.height);
+    }
+
     this.moved = { node: node, parent: node.parentNode, nextSibling: node.nextSibling };
     const holder = this.doc.createElement("div");
     holder.className = "zr-lightbox-node";
     holder.appendChild(node);
-    if (node instanceof SVGGraphicsElement) {
-      try {
-        const b = node.getBBox();
-        this.naturalWidth = Math.round(b.width);
-        this.naturalHeight = Math.round(b.height);
-      } catch {
-        /* 未挂载时 getBBox 会抛，忽略即可 */
-      }
-    }
     if (meta && meta.title) holder.setAttribute("data-title", meta.title);
     this.build(holder, node);
   }
@@ -322,4 +352,192 @@ export function registerLightboxClicks(
   };
   doc.addEventListener("click", handler, { capture: true });
   return () => doc.removeEventListener("click", handler, { capture: true });
+}
+
+/* ============================================================================
+ * 悬停放大按钮：图片 / 图表右上角的小按钮
+ * ---------------------------------------------------------------------------
+ * 为什么不「点击图片就放大」：阅读时点击图片本身有别的含义（Obsidian 自己的
+ * 图片查看器、选中、拖拽），把放大绑在悬停按钮上更克制 —— 需要时才出现，
+ * 也不打扰只想读文字的读者。
+ *
+ * 实现要点：
+ *   ① 单例按钮 + position: fixed，不改变笔记的 DOM 结构（不包一层容器），
+ *      因此不会影响 Obsidian 的图片嵌入、链接、拖拽；
+ *   ② 只有指针支持悬停（(hover: hover)）时才启用；触屏设备仍然轻点打开；
+ *   ③ 滚动 / 改变窗口大小 / 指针离开 → 立即隐藏，按钮永远不会「飘」在错误的位置。
+ * ========================================================================== */
+
+export interface ZoomAffordanceOptions {
+  images: boolean;
+  diagrams: boolean;
+  onTarget: (target: LightboxTarget) => void;
+  /** 桌面是否也用「点击图片」作为入口（默认 false：桌面只认悬停按钮） */
+  clickToOpen?: boolean;
+  /** 是否强制启用悬停按钮（验证台用；真实环境由 matchMedia 判定） */
+  forceHover?: boolean;
+  /** 按钮文案（无障碍标签） */
+  label?: string;
+}
+
+interface AffordanceHit {
+  target: LightboxTarget;
+  /** 用来定位按钮的盒子：图片就是图片本身，图表就是它的容器 */
+  box: Element;
+}
+
+/** 太小的 svg 多半是图标（callout 图标、按钮图标、行内符号），不该接管。 */
+const MIN_DIAGRAM_WIDTH = 96;
+const MIN_DIAGRAM_HEIGHT = 48;
+
+/** 判定一个 svg 是不是「值得放大的图」：够大、不是图标、不在链接/按钮里。 */
+function isZoomableSvg(svg: Element): boolean {
+  if (svg.closest("a, button, .clickable-icon, .callout-icon, .svg-icon, .zr-lightbox, .zr-zoom-affordance")) return false;
+  const rect = svg.getBoundingClientRect();
+  return rect.width >= MIN_DIAGRAM_WIDTH && rect.height >= MIN_DIAGRAM_HEIGHT;
+}
+
+function findAffordanceHit(el: Element, opts: { images: boolean; diagrams: boolean }): AffordanceHit | null {
+  if (el.closest("a")) return null;
+  if (opts.diagrams) {
+    /* 不只 Mermaid：Excalidraw 的内嵌 svg、dataview/charts 画出来的 svg、
+     * 笔记里直接写的 <svg> 都算「图」，只要够大就接管。
+     * 定位用的盒子优先取图表的容器（按钮落在容器右上角更整齐）。 */
+    const svg = el.closest("svg");
+    if (svg && isZoomableSvg(svg)) {
+      const box = svg.closest(".mermaid, figure, .block-language-chart, .excalidraw-svg") || svg;
+      return { target: { kind: "diagram", element: svg }, box: box };
+    }
+  }
+  if (opts.images) {
+    const img = el.closest("img");
+    if (img && img.closest(".markdown-rendered, .markdown-preview-view")) {
+      return { target: { kind: "image", element: img }, box: img };
+    }
+  }
+  return null;
+}
+
+/** 一个克制的「放大」图标：两条对角箭头，用 createElementNS 画，不引入任何依赖。 */
+function buildZoomIcon(doc: Document): SVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = doc.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("aria-hidden", "true");
+  const paths = ["M6 2H2v4", "M10 2h4v4", "M6 14H2v-4", "M10 14h4v-4"];
+  for (const d of paths) {
+    const path = doc.createElementNS(NS, "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.6");
+    path.setAttribute("stroke-linecap", "round");
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
+export function installZoomAffordance(doc: Document, opts: ZoomAffordanceOptions): () => void {
+  const win = doc.defaultView;
+  const hoverCapable = opts.forceHover === true
+    ? true
+    : !!(win && typeof win.matchMedia === "function" && win.matchMedia("(hover: hover)").matches);
+
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = "zr-zoom-affordance";
+  button.setAttribute("aria-label", opts.label || "Zoom in");
+  button.title = opts.label || "Zoom in";
+  button.hidden = true;
+  button.appendChild(buildZoomIcon(doc));
+
+  const state = { hit: null as AffordanceHit | null, visible: false };
+
+  const hide = () => {
+    if (!state.visible) return;
+    state.visible = false;
+    button.hidden = true;
+  };
+
+  const place = (hit: AffordanceHit) => {
+    const rect = hit.box.getBoundingClientRect();
+    const size = 26;
+    const gap = 6;
+    const viewW = win ? win.innerWidth : rect.right + gap;
+    const viewH = win ? win.innerHeight : rect.bottom + gap;
+    /* 目标滚出视野就干脆不显示，避免按钮留在旧位置「飘」着 */
+    if (rect.bottom < 0 || rect.top > viewH || rect.right < 0 || rect.left > viewW) {
+      hide();
+      return;
+    }
+    /* 右上角内侧（距边 6px）后，再夹进可视区域：比视口更宽的图
+     * （1600px 的图放在 900px 窗口里）右上角在屏幕外，不夹就点不到按钮。 */
+    const left = Math.max(gap, Math.min(rect.right - size - gap, viewW - size - gap));
+    const top = Math.max(gap, Math.min(rect.top + gap, viewH - size - gap));
+    button.style.left = left + "px";
+    button.style.top = top + "px";
+    button.hidden = false;
+    state.visible = true;
+  };
+
+
+  const onOver = (event: Event) => {
+    if (!hoverCapable) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target === button) return;
+    const hit = findAffordanceHit(target, opts);
+    if (!hit) return;
+    state.hit = hit;
+    place(hit);
+  };
+
+  const onOut = (event: Event) => {
+    if (!hoverCapable) return;
+    const related = (event as MouseEvent).relatedTarget;
+    if (related instanceof Element && (related === button || button.contains(related))) return;
+    const target = event.target;
+    if (target instanceof Element && findAffordanceHit(target, opts)) hide();
+  };
+
+  const onButtonClick = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const hit = state.hit;
+    hide();
+    if (hit) opts.onTarget(hit.target);
+  };
+
+  const onClick = (event: MouseEvent) => {
+    if (!hoverCapable || opts.clickToOpen === true) {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const target = event.target;
+      if (!(target instanceof Element) || target === button) return;
+      const hit = findAffordanceHit(target, opts);
+      if (!hit) return;
+      event.preventDefault();
+      event.stopPropagation();
+      opts.onTarget(hit.target);
+    }
+  };
+
+  doc.addEventListener("mouseover", onOver, { capture: true });
+  doc.addEventListener("mouseout", onOut, { capture: true });
+  doc.addEventListener("click", onClick, { capture: true });
+  doc.addEventListener("scroll", hide, { capture: true, passive: true });
+  button.addEventListener("click", onButtonClick);
+  doc.body.appendChild(button);
+  if (win) win.addEventListener("resize", hide);
+  const teardown = () => {
+    doc.removeEventListener("mouseover", onOver, { capture: true });
+    doc.removeEventListener("mouseout", onOut, { capture: true });
+    doc.removeEventListener("click", onClick, { capture: true });
+    doc.removeEventListener("scroll", hide, { capture: true });
+    button.removeEventListener("click", onButtonClick);
+    if (win) win.removeEventListener("resize", hide);
+    if (button.parentNode) button.parentNode.removeChild(button);
+  };
+  return teardown;
 }

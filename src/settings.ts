@@ -19,6 +19,8 @@ export interface ZoomableReaderSettings {
   diagramViewer: boolean;
   /** 查看器打开时先适配窗口（关掉则先按 100%） */
   lightboxFitOnOpen: boolean;
+  /** 桌面上点击图片也直接打开查看器（默认关：桌面上用右上角的悬停按钮） */
+  clickToOpenViewer: boolean;
 }
 
 export { DEFAULT_SETTINGS };
@@ -63,10 +65,10 @@ export class ZoomableReaderSettingTab extends PluginSettingTab {
 
     new Setting(container)
       .setName("Maximum zoom")
-      .setDesc("Upper limit for pinch and Ctrl+wheel zoom.")
+      .setDesc("Upper limit for pinch and wheel zoom. High values are fine; the cap only exists so a stray gesture cannot lose your place.")
       .addSlider((slider) =>
         slider
-          .setLimits(2, 16, 1)
+          .setLimits(8, 256, 8)
           .setValue(this.plugin.settings.maxScale)
           .onChange(async (value) => {
             this.plugin.settings.maxScale = value;
@@ -113,6 +115,16 @@ export class ZoomableReaderSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.diagramViewer).onChange(async (value) => {
           this.plugin.settings.diagramViewer = value;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(container)
+      .setName("Open the viewer by clicking images too")
+      .setDesc("Off: on desktop the small button in the top right corner of an image opens the viewer, and clicking the image keeps its usual meaning. On touch devices a tap always opens the viewer, since there is no hover.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.clickToOpenViewer).onChange(async (value) => {
+          this.plugin.settings.clickToOpenViewer = value;
           await this.plugin.saveSettings();
         })
       );

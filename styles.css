@@ -190,12 +190,47 @@ body.is-mobile .zr-label {
   will-change: transform;
 }
 
+/* 放大后的图片/图表【不上色、不加边框、不加阴影、不加圆角】：
+ * 原本是什么样，放大就是什么样。图表本来就是「透明背景 + 实心线框与文字」，
+ * 给它铺一层纸底反而把它变成了卡片 —— 这是刻意的克制。 */
 .zr-lightbox-image,
 .zr-lightbox-node svg {
   display: block;
-  background-color: var(--background-primary);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* --- 悬停放大按钮（图片 / 图表右上角）------------------------------------- */
+.zr-zoom-affordance {
+  position: fixed;
+  z-index: var(--layer-popover, 30);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s, 4px);
+  background-color: var(--background-primary);
+  color: var(--text-muted);
+  opacity: 0.72;
+  cursor: pointer;
   box-shadow: var(--shadow-s, 0 1px 3px rgba(0, 0, 0, 0.12));
+  transition: opacity 120ms ease, color 120ms ease;
+}
+
+.zr-zoom-affordance[hidden] {
+  display: none;
+}
+
+.zr-zoom-affordance:hover,
+.zr-zoom-affordance:focus-visible {
+  opacity: 1;
+  color: var(--text-normal);
+  border-color: var(--interactive-accent, var(--text-accent));
 }
 
 /* 打开查看器时锁住底层滚动，减少手机上的误触 */

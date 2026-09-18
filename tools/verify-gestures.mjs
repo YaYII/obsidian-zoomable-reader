@@ -205,8 +205,37 @@ try {
   const lbState = () => lb.evaluate(() => window.lightboxHarness.transform());
   const lbRect = await lb.evaluate(() => window.lightboxHarness.rect());
 
-  await lb.click("#photo");
+  const photoBox = await lb.locator("#photo").boundingBox();
+  const hostBox = await lb.locator("#diagram-host").boundingBox();
+
+  /* ① 悬停才出现按钮：不悬停时按钮必须不存在 */
+  const beforeHover = await lb.evaluate(() => window.lightboxHarness.affordanceVisible());
+  assert(!beforeHover, "未悬停时，右上角按钮不出现（不打扰阅读）", "visible=" + beforeHover);
+
+  await lb.mouse.move(photoBox.x + photoBox.width / 2, photoBox.y + photoBox.height / 2);
   await lb.waitForTimeout(120);
+  const btnBox = await lb.evaluate(() => window.lightboxHarness.affordanceBox());
+  assert(!!btnBox, "鼠标移到图片上 → 右上角出现放大按钮", btnBox ? "按钮 " + Math.round(btnBox.width) + "x" + Math.round(btnBox.height) : "未出现");
+  if (btnBox) {
+    const nearRight = Math.abs(photoBox.x + photoBox.width - btnBox.right - 6) <= 2;
+    const nearTop = Math.abs(btnBox.top - photoBox.y - 6) <= 2;
+    assert(nearRight && nearTop, "按钮贴在图片显示区域的右上角内侧（距边 6px）",
+      "图片右上 (" + Math.round(photoBox.x + photoBox.width) + "," + Math.round(photoBox.y) + ") 按钮 (" + Math.round(btnBox.right) + "," + Math.round(btnBox.top) + ")");
+  }
+
+  await lb.screenshot({ path: path.join(OUT, "lightbox-affordance.png") });
+
+  /* ② 不点按钮、直接点图片：桌面不应打开查看器（保持点击的原意） */
+  await lb.mouse.click(photoBox.x + photoBox.width / 2, photoBox.y + photoBox.height / 2);
+  await lb.waitForTimeout(120);
+  const afterPlainClick = await lb.evaluate(() => window.lightboxHarness.isOpen());
+  assert(!afterPlainClick, "桌面上直接点图片不会打开查看器（点击保持原意）", "open=" + afterPlainClick);
+
+  /* ③ 点按钮才打开 */
+  await lb.mouse.move(photoBox.x + photoBox.width / 2, photoBox.y + photoBox.height / 2);
+  await lb.waitForTimeout(80);
+  await lb.click(".zr-zoom-affordance");
+  await lb.waitForTimeout(150);
   const opened = await lb.evaluate(() => ({
     open: window.lightboxHarness.isOpen(),
     overlays: window.lightboxHarness.overlayCount(),
@@ -216,7 +245,11 @@ try {
     inPlace: window.lightboxHarness.diagramBackInPlace(),
   }));
   const first = await lbState();
-  assert(opened.open && opened.overlays === 1, "点击图片 → 打开查看器（且只有一个浮层）", "overlays=" + opened.overlays);
+  assert(opened.open && opened.overlays === 1, "点右上角按钮 → 打开查看器（且只有一个浮层）", "overlays=" + opened.overlays);
+  const contentStyle = await lb.evaluate(() => window.lightboxHarness.contentStyle());
+  assert(contentStyle && contentStyle.background === "rgba(0, 0, 0, 0)" && contentStyle.borderWidth === "0px" && contentStyle.boxShadow === "none",
+    "放大后的内容不加背景/边框/阴影（原本什么样就什么样）",
+    JSON.stringify(contentStyle));
   assert(/^\d+ x \d+ px/.test(String(opened.size)), "工具条显示原始尺寸与当前显示尺寸", String(opened.size));
   assert(opened.inPlace && !opened.moved, "未打开图表时，图表仍在原位", "inPlace=" + opened.inPlace);
 
@@ -276,17 +309,74 @@ try {
   const closedByBackground = await lb.evaluate(() => window.lightboxHarness.isOpen());
   assert(!closedByBackground, "点击空白背景也能关闭", "open=" + closedByBackground);
 
-  await lb.click(".mermaid svg");
+  await lb.mouse.move(hostBox.x + hostBox.width / 2, hostBox.y + hostBox.height / 2);
   await lb.waitForTimeout(120);
+  const diagramBtn = await lb.evaluate(() => window.lightboxHarness.affordanceBox());
+  const hostRight = hostBox.x + hostBox.width;
+  assert(!!diagramBtn && Math.abs(hostRight - diagramBtn.right - 6) <= 2,
+    "图表容器右上角也出现同一个按钮", diagramBtn ? "容器右 " + Math.round(hostRight) + " 按钮右 " + Math.round(diagramBtn.right) : "未出现");
+  await lb.click(".zr-zoom-affordance");
+  await lb.waitForTimeout(150);
   const diagramOpen = await lb.evaluate(() => ({
     open: window.lightboxHarness.isOpen(),
     moved: window.lightboxHarness.diagramParentIsOverlay(),
+    style: window.lightboxHarness.contentStyle(),
   }));
-  assert(diagramOpen.open && diagramOpen.moved, "点击图表 → 图表被搬进查看器（保留原样式作用域）", "moved=" + diagramOpen.moved);
+  assert(diagramOpen.open && diagramOpen.moved, "点按钮 → 图表被搬进查看器（保留原样式作用域）", "moved=" + diagramOpen.moved);
+  assert(diagramOpen.style && diagramOpen.style.background === "rgba(0, 0, 0, 0)",
+    "放大的图表背景透明（线框与文字保持实心配色）", JSON.stringify(diagramOpen.style));
   await lb.evaluate(() => window.lightboxHarness.lightbox.close());
   await lb.waitForTimeout(120);
   const svgRestored = await lb.evaluate(() => window.lightboxHarness.diagramBackInPlace());
   assert(svgRestored, "关闭后图表放回原位", "inPlace=" + svgRestored);
+
+  /* ④ 其它插件画出来的 svg（只有 viewBox / width=100% / 固定像素）也必须能放大，
+   *    而且不能再被 8 倍上限卡住（用户报的「其它 svg 放大失效」）。 */
+  for (const svgId of ["svg-viewbox", "svg-percent", "svg-fixed"]) {
+    await lb.locator("#" + svgId).scrollIntoViewIfNeeded();
+    const box = await lb.locator("#" + svgId).boundingBox();
+    /* 先把指针移到空白处再移进来：滚动之后指针若恰好在图上，不会重新触发 mouseover，
+     * 按钮就不会出现（这是真实行为，测试里要显式制造「移入」这个动作）。 */
+    await lb.mouse.move(4, 4);
+    await lb.waitForTimeout(40);
+    await lb.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await lb.waitForTimeout(120);
+    const btn = await lb.evaluate(() => window.lightboxHarness.affordanceBox());
+    const viewport = lb.viewportSize();
+    const insideView = !!btn && btn.left >= 0 && btn.top >= 0 && btn.right <= viewport.width && btn.bottom <= viewport.height;
+    const withinBox = !!btn && btn.right >= box.x && btn.left <= box.x + box.width;
+    assert(!!btn, svgId + "：悬停出现放大按钮", btn ? "有" : "无");
+    assert(insideView && withinBox,
+      svgId + "：按钮被夹在可视区域内且横向落在图的范围里（宽图也不会跑到屏幕外）",
+      btn ? "按钮 " + Math.round(btn.left) + "-" + Math.round(btn.right) + "，图 " + Math.round(box.x) + "-" + Math.round(box.x + box.width) + "，视口宽 " + viewport.width : "未出现");
+    /* 用按钮坐标发真实鼠标事件：Playwright 的 click() 会因「元素在视口外」直接拒绝，
+     * 而这里要验的正是「宽图的按钮也在视口内、点得到」。 */
+    await lb.mouse.click(btn.left + btn.width / 2, btn.top + btn.height / 2);
+    await lb.waitForTimeout(140);
+    const openedSvg = await lb.evaluate(() => {
+      const node = document.querySelector(".zr-lightbox-node svg");
+      const t = window.lightboxHarness.transform();
+      return {
+        open: window.lightboxHarness.isOpen(),
+        pinnedWidth: node ? node.style.width : "",
+        fitScale: t ? t.scale : 0,
+      };
+    });
+    assert(openedSvg.open, svgId + "：点按钮 → 打开查看器", "open=" + openedSvg.open);
+    assert(/px$/.test(String(openedSvg.pinnedWidth)),
+      svgId + "：进查看器后尺寸被钉成像素（否则自身尺寸成循环依赖，放不动）",
+      "style.width=" + (openedSvg.pinnedWidth || "(未设置)"));
+    for (let i = 0; i < 16; i++) await lb.evaluate(() => window.lightboxHarness.clickToolbar("Zoom in"));
+    await lb.waitForTimeout(140);
+    const bigScale = await lb.evaluate(() => window.lightboxHarness.transform().scale);
+    /* 断言写成「相对起点放大 10 倍以上」而不是绝对倍数：适配比例因图而异
+     * （宽图起点小），绝对值会把正确的行为判成失败（这一条自己踩过）。 */
+    assert(bigScale > 8 && bigScale >= openedSvg.fitScale * 10,
+      svgId + "：可以持续放大（≥ 起点 10 倍，且突破旧的 8 倍上限）",
+      "起点 " + fmt(openedSvg.fitScale) + " → " + fmt(bigScale) + "（" + fmt(bigScale / (openedSvg.fitScale || 1)) + "x）");
+    await lb.evaluate(() => window.lightboxHarness.lightbox.close());
+    await lb.waitForTimeout(100);
+  }
 
   await lb.screenshot({ path: path.join(OUT, "lightbox-desktop.png") });
   assert(lbErrors.length === 0, "查看器验证台无脚本错误", lbErrors.slice(0, 2).join(" | ") || "无");
@@ -313,8 +403,10 @@ try {
       touchPoints: points.map((pt, i) => ({ x: pt.x, y: pt.y, radiusX: 8, radiusY: 8, force: 1, id: pt.id === undefined ? i + 1 : pt.id })),
     });
 
-  const photoBox = await mLb.locator("#photo").boundingBox();
-  await mTouch("touchStart", [{ x: photoBox.x + photoBox.width / 2, y: photoBox.y + photoBox.height / 2 }]);
+  /* 切到真实触屏判定：没有悬停 → 轻点即打开查看器（这才是手机上的行为） */
+  await mLb.evaluate(() => window.lightboxHarness.setTouchMode());
+  const mPhotoBox = await mLb.locator("#photo").boundingBox();
+  await mTouch("touchStart", [{ x: mPhotoBox.x + mPhotoBox.width / 2, y: mPhotoBox.y + mPhotoBox.height / 2 }]);
   await mTouch("touchEnd", []);
   await mLb.waitForTimeout(150);
   const mOpened = await mLb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), label: window.lightboxHarness.label() }));

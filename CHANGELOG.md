@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.2.0
+
+- **The zoom entry point is now a small button in the top right corner of an image** (and of a
+  diagram), shown only while the pointer is over it. Clicking the image itself keeps its usual
+  meaning, which is the calmer interaction for reading: the button appears when you want it and
+  stays out of the way otherwise. On touch devices — where there is no hover — a tap still opens
+  the viewer.
+- New setting **Open the viewer by clicking images too** (off by default) for anyone who prefers
+  the direct click on desktop.
+- **Nothing is decorated in the viewer.** An image is shown as it is; a diagram keeps its
+  transparent background with solid lines and text, exactly as it looks in the note — no card
+  surface, no border, no shadow, no rounded corners. What you zoom into is what you saw.
+
+- **Zooming in is no longer capped at 8x.** The default limit is now 64x (settings allow up to
+  256x), because reading the small print of a 4K screenshot regularly needed more than 8x. The
+  corner button is also clamped into the visible area now, so it stays clickable on diagrams that
+  are wider than the window.
+- **SVGs drawn by other plugins zoom too.** The button and the viewer used to look only for
+  `.mermaid svg`; now any reasonably large `<svg>` in the rendered note is picked up
+  (Excalidraw embeds, chart blocks, plain `<svg>` in a note), while icons — callout icons, button
+  icons, inline symbols — are excluded by size and by their container.
+
+Fixed, and this one is why "other SVGs" could not be zoomed at all: the viewer measured a diagram
+*after* moving it into the overlay, where `getBBox()` and `getBoundingClientRect()` both return
+zero on an element that is not in the document. With no measured size, the fit scale was garbage
+and the diagram's own size depended on its container. It now measures and pins the pixel size
+first, then moves the node.
+
+Verification grew from 43 to **65 assertions**, all driven by real events: the button is absent
+until the pointer is over an image, sits 6px inside the image's top right corner (measured against
+the image's own bounding box), opens the viewer when clicked, does not open it when the image
+itself is clicked, both the image and the diagram inside the viewer compute to
+`background: rgba(0, 0, 0, 0)`, `border: 0`, `box-shadow: none`, and three SVG shapes that
+plugins commonly produce (viewBox only, `width="100%"`, fixed pixels) each open, get their size
+pinned, and keep zooming to 35x.
+
 ## 1.1.0
 
 - **Image and diagram viewer.** Click an image in a note to open it full screen, zoomed to fit;

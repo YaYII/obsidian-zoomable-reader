@@ -1,6 +1,6 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./src/defaults";
-import { ImageLightbox, registerLightboxClicks } from "./src/lightbox";
+import { ImageLightbox, installZoomAffordance } from "./src/lightbox";
 import { ZoomableReaderSettingTab, ZoomableReaderSettings } from "./src/settings";
 import { Transform, normalizeTransform } from "./src/zoom-pan";
 import { VIEW_TYPE_ZOOMABLE_READER, ZoomableReaderView } from "./src/view";
@@ -42,15 +42,22 @@ export default class ZoomableReaderPlugin extends Plugin {
   }
 
   /**
-   * 点击笔记里的图片 / 图表 → 打开可缩放查看器。
-   * 判定逻辑在 src/lightbox.ts 的 findLightboxTarget / registerLightboxClicks 里，
-   * 那部分刻意不依赖 obsidian，因此在真实浏览器里可以用真点击验证。
+   * 图片 / 图表的放大入口。
+   *
+   * 桌面：指针移到图片（或图表）上时，右上角出现一个小按钮，点它才打开查看器 ——
+   *       点击图片本身保持它原本的含义（选中、拖拽、Obsidian 自己的行为）。
+   * 触屏：没有悬停，轻点即打开查看器。
+   *
+   * 判定与按钮都在 src/lightbox.ts 的 installZoomAffordance 里，那部分不依赖
+   * obsidian，因此能在真实浏览器里用真鼠标/真触摸验证。
    */
   private registerLightbox(): void {
     const doc = this.app.workspace.containerEl.ownerDocument;
-    const detach = registerLightboxClicks(doc, {
+    const detach = installZoomAffordance(doc, {
       images: this.settings.imageViewer,
       diagrams: this.settings.diagramViewer,
+      clickToOpen: this.settings.clickToOpenViewer,
+      label: "Zoom in",
       onTarget: (found) => {
         const lightbox = this.openLightbox();
         if (found.kind === "image") lightbox.openImage(found.element as HTMLImageElement);

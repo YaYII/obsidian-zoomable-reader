@@ -4,10 +4,13 @@ import type { ZoomableReaderSettings } from "./settings";
 export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   rememberPosition: true,
   doubleTapZoom: 2,
-  maxScale: 8,
+  /* 默认放宽到 64 倍：看 4K 截图里的小字时，8 倍常常不够。
+   * 上限只是防呆，不是设计意图 —— 需要时可在设置里调到 256。 */
+  maxScale: 64,
   showToolbar: true,
   padding: 16,
   imageViewer: true,
   diagramViewer: true,
   lightboxFitOnOpen: true,
+  clickToOpenViewer: false,
 };
