@@ -313,6 +313,7 @@ function visibleCards() {
     contentPoint: function (px, py) { var t = layer.transform; return { x: (px - t.x) / t.scale, y: (py - t.y) / t.scale }; },
     focusCard: focusCard,
     fitBoard: function () { layer.focusRect({ x: 0, y: 0, width: board.layout.width, height: board.layout.height }, 16); },
+    fitColumn: function () { layer.fitWidth(16); },
     reset: function (padding) { layer.reset(padding === undefined ? 16 : padding); },
     setPinch: function (on) { settings.pinch = !!on; buildLayer(); },
     setModeClasses: function (mode) { window.BoardRender.applyModeClasses(rootEl, mode); },

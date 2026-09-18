@@ -6,6 +6,7 @@ import {
   FLOW_MAX_INDENT_DEPTH,
   cardAt,
   estimateCardHeight,
+  flowIndentStep,
   layoutBoard,
   layoutBoardByMode,
   layoutBoardFlow,
@@ -179,10 +180,10 @@ describe("layoutBoardFlow：单栏纵向流（一张 A5 纸，往下滑就是往
     expect(layout.cards.map((c) => c.id)).toEqual(doc.nodes.map((n) => n.id));
   });
 
-  it("层级用缩进表达，且缩进到第 3 级就封顶（纸再窄就不是纸了）", () => {
+  it("层级用缩进表达，且缩进到第 3 级就封顶", () => {
     for (const card of doc.nodes) {
       const rect = layout.byId[card.id];
-      expect(rect.x).toBe(40 + Math.min(card.depth, FLOW_MAX_INDENT_DEPTH) * FLOW_INDENT_STEP);
+      expect(rect.x).toBe(40 + Math.min(card.depth, FLOW_MAX_INDENT_DEPTH) * flowIndentStep(560));
     }
     const deep = layout.cards.filter((c) => c.depth >= FLOW_MAX_INDENT_DEPTH).map((c) => c.x);
     expect(new Set(deep).size).toBe(1);
@@ -202,9 +203,15 @@ describe("layoutBoardFlow：单栏纵向流（一张 A5 纸，往下滑就是往
     }
   });
 
-  it("宽度 = 留白×2 + 最大缩进 + 纸张宽度（不会随内容横着长）", () => {
-    const maxIndent = Math.min(3, FLOW_MAX_INDENT_DEPTH) * FLOW_INDENT_STEP;
+  it("宽度 = 留白×2 + 最大缩进 + 栏宽（不会随内容横着长）", () => {
+    const maxIndent = FLOW_MAX_INDENT_DEPTH * flowIndentStep(560);
     expect(layout.width).toBe(40 * 2 + maxIndent + 560);
+  });
+
+  it("缩进随栏宽放大：1280 宽的栏里，18px 的缩进根本看不出层级", () => {
+    expect(flowIndentStep(1280)).toBeGreaterThan(flowIndentStep(560));
+    expect(flowIndentStep(1280)).toBeGreaterThanOrEqual(30);
+    expect(flowIndentStep(320)).toBe(FLOW_INDENT_STEP);
   });
 
   it("实测高度优先（第二遍按真实 DOM 高度重排）", () => {

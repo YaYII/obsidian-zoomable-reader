@@ -4,8 +4,10 @@ import {
   DEFAULT_SETTINGS,
   PAPER_WIDTHS_PX,
   SETTINGS_GROUPS,
+  WEB_WIDTH_PX,
   cardWidthLabel,
   paperNameFor,
+  widthPresetName,
   widthToMm,
 } from "../src/settings-spec";
 
@@ -91,31 +93,40 @@ describe("设置页的双语契约", () => {
   });
 });
 
-describe("纸张尺寸：默认 A5（用户要求「默认要 A5，这符合纸张的大小」）", () => {
-  it("默认卡片宽 = A5 宽（148mm 在 96dpi 下 ≈ 560px）", () => {
-    expect(paperNameFor(DEFAULT_SETTINGS.boardCardWidth)).toBe("A5");
-    expect(widthToMm(DEFAULT_SETTINGS.boardCardWidth)).toBe(148);
-    expect(Math.abs(DEFAULT_SETTINGS.boardCardWidth - (148 / 25.4) * 96)).toBeLessThanOrEqual(1);
+describe("栏宽：默认 1280 网页宽（用户要求「改成网页的宽度 1280px，符合上下滑动观看」）", () => {
+  it("默认栏宽 = 1280px（网页版心）", () => {
+    expect(DEFAULT_SETTINGS.boardCardWidth).toBe(WEB_WIDTH_PX);
+    expect(WEB_WIDTH_PX).toBe(1280);
+    expect(widthPresetName(DEFAULT_SETTINGS.boardCardWidth)).toContain("网页宽");
   });
 
-  it("三张常见纸都能被认出来（A6 / A5 / A4）", () => {
-    expect(paperNameFor(PAPER_WIDTHS_PX.A6)).toBe("A6");
+  it("纸张仍是可选预设：A5 宽 148mm 在 96dpi 下 ≈ 560px", () => {
     expect(paperNameFor(PAPER_WIDTHS_PX.A5)).toBe("A5");
+    expect(widthToMm(PAPER_WIDTHS_PX.A5)).toBe(148);
+    expect(Math.abs(PAPER_WIDTHS_PX.A5 - (148 / 25.4) * 96)).toBeLessThanOrEqual(1);
+  });
+
+  it("三张常见纸都能被认出来（A6 / A5 / A4），1280 不算纸", () => {
+    expect(paperNameFor(PAPER_WIDTHS_PX.A6)).toBe("A6");
     expect(paperNameFor(PAPER_WIDTHS_PX.A4)).toBe("A4");
+    expect(paperNameFor(WEB_WIDTH_PX)).toBeNull();
     expect(paperNameFor(500)).toBeNull();
   });
 
-  it("滑块读数带毫米与纸名（用户按「多大一张纸」来选，而不是按像素）", () => {
-    expect(cardWidthLabel(DEFAULT_SETTINGS.boardCardWidth)).toContain("A5");
-    expect(cardWidthLabel(DEFAULT_SETTINGS.boardCardWidth)).toContain("148mm");
+  it("滑块读数说人话：网页宽给「网页宽 Web」，纸张给毫米数", () => {
+    expect(cardWidthLabel(WEB_WIDTH_PX)).toContain("网页宽");
+    expect(cardWidthLabel(PAPER_WIDTHS_PX.A5)).toContain("A5");
+    expect(cardWidthLabel(PAPER_WIDTHS_PX.A5)).toContain("148mm");
     expect(cardWidthLabel(500)).toContain("132mm");
   });
 
-  it("A4 也在滑块能选到的范围内", () => {
+  it("滑块范围能选到 1280（默认值）与 A4", () => {
     const spec = ALL_SETTING_SPECS.find((s) => s.id === "board-card-width");
     expect(spec?.control).toBe("slider");
-    const slider = spec as { min: number; max: number };
+    const slider = spec as { min: number; max: number; step: number };
+    expect(slider.max).toBeGreaterThanOrEqual(WEB_WIDTH_PX);
     expect(slider.max).toBeGreaterThanOrEqual(PAPER_WIDTHS_PX.A4);
+    expect((WEB_WIDTH_PX - slider.min) % slider.step).toBe(0);
   });
 });
 

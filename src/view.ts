@@ -116,6 +116,11 @@ export class ZoomableReaderView extends ItemView {
       this.registerDomEvent(this.labelEl, "click", () => this.resetView());
       this.makeButton(bar, "plus", "放大 / Zoom in", () => this.zoom(1));
       if (this.mode === "board") {
+        /* 「适配栏宽」：把整栏铺满视口宽度 —— 之后只剩上下滑动，一眼一行读到尾。
+         * 栏宽 1280 在手机上装不下一屏时，这是「上下滑动阅读」最快的一个动作。 */
+        this.makeButton(bar, "move-horizontal", "适配栏宽 / Fit column width", () => {
+          if (this.layer) this.layer.fitWidth(this.padding);
+        });
         this.makeButton(bar, "scan", "回到全图 / Fit the whole board", () => this.fitBoard());
         this.makeButton(bar, "focus", "回到标题卡 / Back to the title card", () => this.focusRoot());
         this.makeButton(bar, "refresh-cw", "重新编译 / Recompile now", () => void this.recompile());

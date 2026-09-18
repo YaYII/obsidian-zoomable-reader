@@ -63,9 +63,15 @@ export const DEFAULT_BOARD_LAYOUT: Omit<BoardLayoutOptions, "heights"> = {
   padding: 40,
 };
 
-/** 纵向流里每深一级缩进多少（px）。缩进到第 3 级就不再往里缩了：A5 纸再窄就不是纸了。 */
+/** 纵向流里每深一级缩进多少（px）。缩进到第 3 级就不再往里缩了。
+ *  按栏宽取比例（默认 1280 时约 38px）—— 固定 18px 在宽栏里根本看不出层级。 */
 export const FLOW_INDENT_STEP = 18;
 export const FLOW_MAX_INDENT_DEPTH = 3;
+
+/** 实际缩进值：至少 18px，宽栏时约取栏宽的 3%。 */
+export function flowIndentStep(cardWidth: number): number {
+  return Math.max(FLOW_INDENT_STEP, Math.round(cardWidth * 0.03));
+}
 
 /** 白板的两种排版：单栏纵向流（读文档）/ 分支树（看全局）。 */
 export type BoardLayoutMode = "flow" | "tree";
@@ -248,7 +254,7 @@ export function layoutBoardFlow(doc: BoardDoc, options: Partial<BoardLayoutOptio
     const measured = opts.heights ? opts.heights[node.id] : undefined;
     const height = typeof measured === "number" && measured > 0 ? measured : estimateCardHeight(node, cardWidth);
     const level = Math.min(node.depth, FLOW_MAX_INDENT_DEPTH);
-    const indent = level * FLOW_INDENT_STEP;
+    const indent = level * flowIndentStep(cardWidth);
     indentMax = Math.max(indentMax, indent);
     const card: BoardCard = {
       id: node.id,

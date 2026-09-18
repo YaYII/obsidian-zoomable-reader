@@ -13,10 +13,11 @@ wheel on desktop, drag to pan.
 
 ## 中文速览
 
-- **白板模式**：把一篇 Markdown 编译成一张 **A5 纸（148mm）宽的单栏**，**往下滑就是往下读**
-  （默认「单栏纵向流」；标题成节、缩进表达层级、打开即原大）。想要「横着看全局」就在设置里换成
-  **分支树**：标题成列成卡、连线成大纲。**每次进白板都重新编译一遍**，笔记改了白板跟着变
-  （只读，不落盘）。设置 → **白板模式 → 打开笔记时的默认模式 → 白板**，之后就默认进白板。
+- **白板模式**：把一篇 Markdown 编译成 **一栏 1280px（网页版心宽）** 的长页，**往下滑就是往下读**
+  （默认「单栏纵向流」；标题成节、缩进表达层级、打开即原大；工具栏有「适配栏宽」一键把整栏铺满屏）。
+  想要「横着看全局」就在设置里换成 **分支树**：标题成列成卡、连线成大纲。想要纸的感觉可以把栏宽调到
+  560（A5）或 794（A4）。**每次进白板都重新编译一遍**，笔记改了白板跟着变（只读，不落盘）。
+  设置 → **白板模式 → 打开笔记时的默认模式 → 白板**，之后就默认进白板。
 - **双指捏合在哪**：设置页第一组就是 **手势与缩放 → 双指捏合缩放**（还有一张「手势速查」表）。
   手机上要能缩放，必须用**本插件的视图**打开笔记（侧边栏放大镜图标、命令面板，或文件列表长按
   → 「编译成白板」）—— Obsidian 自带的阅读视图无法缩放，这是应用层限制，任何主题都改不了。
@@ -68,10 +69,12 @@ Notes:
 
 ![The same note as a whiteboard: heading cards, content blocks, connectors](docs/images/screenshot-board-desktop.png)
 
-Two layouts, one compiler. The default is **single column**: one A5-wide sheet per section, stacked
-in document order — scrolling down *is* reading down, with indentation for hierarchy. Switch to
-**branch tree** when you want the whole outline sideways. This is not "the note floating on a board"
-— the Markdown itself is compiled:
+Two layouts, one compiler. The default is **single column**: one 1280 px column (a desktop web
+content width — wide enough for long lines, so scrolling down *is* reading down), sections stacked in
+document order with indentation for hierarchy, and a **fit column width** button that fills the
+viewport with the column so only vertical movement remains. Switch to **branch tree** when you want
+the whole outline sideways; set the column to 560 px (A5) or 794 px (A4) if you prefer a sheet of
+paper. This is not "the note floating on a board" — the Markdown itself is compiled:
 
 - **Every heading becomes a card**, holding that section's content. Frontmatter is skipped (it is
   metadata, not the note). Code fences, tables, callouts, quotes, math, images and Mermaid blocks
@@ -102,9 +105,11 @@ Whiteboard settings: **打开笔记时的默认模式 / default mode**, **卡片
 width (paper size)** (320–900 px, default 560 px ≈ A5), **卡片展开层级 / outline depth** (H1–H6),
 **卡片间距 / card spacing**, **显示连线 / connectors**, **卡片数量上限 / card limit**.
 
-Paper first: a card is a sheet. A5 (148 mm ≈ 560 px at 96 dpi) gives roughly 30–40 Chinese
-characters per line, which is what a book does; A4 is wider, A6 narrower. The board opens at
-**natural size** — one A5 page, not a fit-everything miniature — and pans and pinches from there.
+Width first: the default column is **1280 px**, the content width a desktop web page uses — long
+lines, and the whole column fits a normal screen so reading is a vertical gesture. The slider also
+names the paper presets (A5 = 148 mm ≈ 560 px, A4 ≈ 794 px) for anyone who wants a book measure. The
+board opens at **natural size** (not shrunk to fit), and 适配栏宽 / *fit column width* takes you to
+"see the whole column, scroll down" in one tap.
 
 The board is a *view*: it is recompiled every time you enter whiteboard mode, and it recompiles
 again whenever the note changes (a save, or live typing in another pane, throttled to 400 ms).
@@ -134,7 +139,7 @@ Obsidian 1.13+ **settings search** — typing 双指 or pinch jumps straight to 
 | 显示工具条 / Show toolbar | on | Zoom buttons, zoom level, mode switch, fit |
 | 版心四周留白 / Page padding | 16 px | Gap between the note and the edge (page mode) |
 | 白板排版 / Board layout | 单栏纵向流 single column | 单栏纵向流 scroll down to read, or 分支树 branch tree to see the outline sideways |
-| 卡片宽度（纸张大小）/ Card width (paper) | 560 px ≈ A5 | Whiteboard card width; A5 = 148 mm, A4/A6 also easy to pick |
+| 栏宽（卡片宽度）/ Column width | 1280 px（网页宽 Web） | 1280 = desktop web content width; 560 = A5, 794 = A4 for a paper feel |
 | 卡片展开层级 / Outline depth | H3 | Headings deeper than this fold into the ancestor card |
 | 卡片间距 / Card spacing | 32 px | Vertical gap; parent-to-child spacing is 2.5x that |
 | 显示连线 / Show connectors | on | Parent-to-child bezier connectors (branch-tree layout; the single column shows hierarchy by indentation) |

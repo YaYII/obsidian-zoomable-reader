@@ -113,12 +113,22 @@ try {
   const defaults = await page.evaluate(() => ({
     width: window.ZoomableReaderDefaults.boardCardWidth,
     paper: window.Paper.nameFor(window.ZoomableReaderDefaults.boardCardWidth),
-    mm: window.Paper.toMm(window.ZoomableReaderDefaults.boardCardWidth),
+    a5: window.Paper.widths.A5,
+    a5Name: window.Paper.nameFor(window.Paper.widths.A5),
+    a5mm: window.Paper.toMm(window.Paper.widths.A5),
     label: window.Paper.label(window.ZoomableReaderDefaults.boardCardWidth),
     mode: window.ZoomableReaderDefaults.defaultMode,
   }));
-  assert(defaults.paper === "A5", "默认卡片宽度 = A5 纸（148mm）", defaults.width + "px · " + defaults.mm + "mm · " + defaults.label);
-  assert(Math.abs(defaults.width - 560) <= 4, "A5 在 96dpi 下的像素值正确（148 / 25.4 × 96 ≈ 560）", defaults.label);
+  assert(
+    defaults.width === 1280 && defaults.label.indexOf("网页宽") >= 0,
+    "默认栏宽 = 1280px 网页版心（用户要求「改成网页的宽度 1280px，符合上下滑动观看」）",
+    defaults.width + "px · " + defaults.label
+  );
+  assert(
+    defaults.a5Name === "A5" && defaults.a5mm === 148 && Math.abs(defaults.a5 - 560) <= 1,
+    "纸张仍是可选预设：A5 = 148mm ≈ 560px（96dpi 换算没变）",
+    "A5 " + defaults.a5 + "px · " + defaults.a5mm + "mm"
+  );
   assert(near(snapshot.scale, 1, 0.001), "打开白板即 100% 原大（不再缩到整块板/标题卡）", "scale=" + fmt(snapshot.scale));
   const openDom = await page.evaluate(() => window.harness.domCards());
   const topMost = Math.min(...openDom.map((c) => c.top));
@@ -171,11 +181,9 @@ try {
   await page.waitForTimeout(60);
   const layout = await page.evaluate(() => window.harness.layout());
   const dom = await page.evaluate(() => window.harness.domCards());
-  const links = await page.evaluate(() => window.harness.links());
-  const byId = new Map(layout.map((c) => [c.id, c]));
   assert(
     layout.every((c) => Math.abs(c.width - snapshot.cardWidth) < 0.5),
-    "每张卡的宽度都等于设置里的纸张宽度（A5 一列到底）",
+    "每张卡的宽度都等于设置里的栏宽（一列到底，不会随内容横着长）",
     layout[0].width + "px"
   );
 
@@ -262,11 +270,21 @@ try {
   const backLinks = await page.evaluate(() => window.harness.links());
   const backPaths = await page.evaluate(() => document.querySelectorAll(".zr-board-links path").length);
   assert(backLinks.length === 0 && backPaths === 0, "切回单栏纵向流：连线消失（排版切换真的换了布局）", backPaths + " 条 path");
-  await page.evaluate(() => window.harness.reset(0));
-  await page.waitForTimeout(40);
 
+  /* 适配栏宽：整栏宽度铺满视口 —— 1280 栏宽装不下一屏时，「上下滑动阅读」就靠这一下 */
+  await page.evaluate(() => window.harness.fitColumn());
+  await page.waitForTimeout(80);
+  const fitted = await page.evaluate(() => ({ scale: window.harness.state().scale, dom: window.harness.domCards() }));
+  const widest = Math.max(...fitted.dom.map((c) => c.left + c.width));
+  assert(
+    fitted.scale < 1 && widest <= rect.width + 1,
+    "适配栏宽：整栏铺满视口（之后只剩上下滑动）",
+    "scale=" + fmt(fitted.scale) + "，最右 " + fmt(widest) + " / 视口 " + rect.width
+  );
   await page.screenshot({ path: path.join(DOCS, "screenshot-board-desktop.png"), fullPage: false });
   await page.screenshot({ path: path.join(OUT, "board-desktop.png"), fullPage: false });
+  await page.evaluate(() => window.harness.reset(0));
+  await page.waitForTimeout(40);
 
   // ③ 拖动 = 平移（不改缩放）
   await page.evaluate(() => window.harness.reset(16));
@@ -322,7 +340,6 @@ try {
   /* 挑一张【当前真的看得见】的卡来点：视野外的卡点不到（这是测试自己的事，不是插件的事）。 */
   const picked = await pickClickableCard(page, rect, model);
   assert(!!picked, "能找到一张可点击的卡（用于验证点标题聚焦）", picked ? picked.node.title : "一张都点不到");
-  const leafBefore = picked.rect;
   const leaf = picked.node;
   const headBox = await page.evaluate((id) => window.harness.cardHeadBox(id), leaf.id);
   await page.mouse.click(rect.left + headBox.left + headBox.width / 2, rect.top + headBox.top + headBox.height / 2);
@@ -470,8 +487,7 @@ try {
   await mpage.waitForTimeout(40);
   const mModel = await mpage.evaluate(() => window.harness.modelCards());
   const mPicked = await pickClickableCard(mpage, mrect, mModel);
-  assert(!!mPicked, "手机上也能找到一张可点击的卡（560px 的 A5 卡在窄屏上要先回到全图）", mPicked ? mPicked.node.title : "一张都点不到");
-  const mDomBefore = mPicked.rect;
+  assert(!!mPicked, "手机上也能找到一张可点击的卡（1280px 栏宽在窄屏上要先回到全图）", mPicked ? mPicked.node.title : "一张都点不到");
   const mLeaf = mPicked.node;
   const mHeadBox = await mpage.evaluate((id) => window.harness.cardHeadBox(id), mLeaf.id);
   await tap(mrect.left + mHeadBox.left + mHeadBox.width / 2, mrect.top + mHeadBox.top + mHeadBox.height / 2);

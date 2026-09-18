@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.4
+
+- **The column is 1280 px by default — a desktop web content width.** A5 (560 px) turned out to be
+  the wrong default for reading on a screen: long Chinese lines wrapped early and the column felt
+  narrow. 1280 px is the width a web page uses, so lines are long, tables have room, and the column
+  fills a normal screen — which is what makes reading a purely vertical gesture. The slider still
+  names the paper presets (**A5 = 148 mm ≈ 560 px**, A4 ≈ 794 px) and the readout says
+  `1280 px · 网页宽 Web` or `560 px · A5 · 148mm` so the choice is obvious either way.
+- **适配栏宽 / fit column width** — a new toolbar button that fills the viewport with the column
+  width, so on a phone (or a small window) you can see a whole line and then just scroll down. The
+  board still opens at 100% (readable), and you decide when to trade size for the whole column.
+- Indentation scales with the column: 18 px per level was invisible in a 1280 px column, so it is
+  now about 3% of the width (≈ 38 px), still capped at three levels.
+
+Verification: `npm run verify:board` is now **49 assertions** — the default is asserted to be
+1280 px with the readout naming it (`网页宽 Web`), A5 is still asserted to be 148 mm ≈ 560 px as a
+preset, and the new *fit column width* assertion measures the real DOM: after one tap the widest card
+edge lands inside the viewport and the scale is below 1.
+
 ## 1.3.3
 
 - **Two layouts for the whiteboard, and the default is the one you read.** The board used to be a

@@ -73,6 +73,10 @@ export interface ZoomableReaderSettings {
 export const PAPER_WIDTHS_PX = { A6: 397, A5: 560, A4: 794 } as const;
 export type PaperName = keyof typeof PAPER_WIDTHS_PX;
 
+/** 网页版心宽度（桌面 Web 的常见内容宽度）。白板默认就是它：一行放得下长句，
+ *  配合「往下滑就是往下读」最顺 —— 比 A5（560px）宽得多，不再是窄窄一条。 */
+export const WEB_WIDTH_PX = 1280;
+
 /** 这个宽度是不是某张标准纸（容差 8px：滑块步长 10px，落点不会精确到小数点）。 */
 export function paperNameFor(width: number, tolerance: number = 8): PaperName | null {
   for (const name of Object.keys(PAPER_WIDTHS_PX) as PaperName[]) {
@@ -86,10 +90,19 @@ export function widthToMm(width: number): number {
   return Math.round((width / 96) * 25.4);
 }
 
-/** 设置页里滑块右侧的读数：「560 px ≈ A5 · 148mm」。 */
+/** 这个宽度的人话名字：网页宽 / A5 / A4 …… 都不是就返回 null（只报毫米）。 */
+export function widthPresetName(width: number, tolerance: number = 8): string | null {
+  if (Math.abs(width - WEB_WIDTH_PX) <= tolerance) return "网页宽 Web";
+  return paperNameFor(width, tolerance);
+}
+
+/** 设置页里滑块右侧的读数：「1280 px · 网页宽 Web」/「560 px · A5 · 148mm」。 */
 export function cardWidthLabel(width: number): string {
   const paper = paperNameFor(width);
-  return width + " px" + (paper ? " ≈ " + paper : "") + " · " + widthToMm(width) + "mm";
+  if (paper) return width + " px · " + paper + " · " + widthToMm(width) + "mm";
+  const preset = widthPresetName(width);
+  if (preset) return width + " px · " + preset;
+  return width + " px · " + widthToMm(width) + "mm";
 }
 
 export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
@@ -102,9 +115,10 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   defaultMode: "page",
   showToolbar: true,
   padding: 16,
-  /* 默认 A5：卡片就是一张纸（148mm 宽 ≈ 560px）。以前是 320px，正文一行只有二十来个字，
-   * 既不像纸也太窄 —— 用户实测反馈「白板看起来尺寸很小」。 */
-  boardCardWidth: PAPER_WIDTHS_PX.A5,
+  /* 默认 1280px = 网页版心宽度（桌面 Web 常见内容宽度）。
+   * 演进：320px（一行二十来个字，太窄）→ A5 560px（像纸，但手机上仍偏窄）→ 1280px。
+   * 用户实测反馈：「A5 宽度有点小，改成网页的宽度 1280px，这个符合上下滑动观看的体验」。 */
+  boardCardWidth: WEB_WIDTH_PX,
   boardMaxDepth: 3,
   boardGap: 32,
   boardConnectors: true,
@@ -333,14 +347,14 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
         id: "board-card-width",
         key: "boardCardWidth",
         min: 320,
-        max: 900,
-        step: 10,
+        max: 1600,
+        step: 20,
         format: cardWidthLabel,
-        zh: "卡片宽度（纸张大小）",
-        en: "Card width (paper size)",
-        zhDesc: "默认 A5（148mm ≈ 560px）：卡片就是一张纸，一行 30~40 个汉字，接近书的行长。A4 更宽、A6 更窄；白板本身可以捏合缩放，选自己顺眼的。",
-        enDesc: "Defaults to A5 (148mm, about 560px): a card is a sheet of paper, 30-40 Chinese characters per line. A4 is wider, A6 narrower; the board itself zooms, so pick what reads best.",
-        aliases: ["卡片", "宽度", "纸张", "尺寸", "A4", "A5", "A6", "card", "width", "paper", "size", "board"],
+        zh: "栏宽（卡片宽度）",
+        en: "Column width (card width)",
+        zhDesc: "默认 1280px = 网页版心宽度：一行放得下长句，配合上下滑动阅读最顺。想要纸的感觉可以调到 560（A5）或 794（A4），读数会显示毫米数；白板本身能捏合缩放，选自己顺眼的。",
+        enDesc: "Defaults to 1280 px, a desktop web content width: long lines, and it reads well when you simply scroll down. Pick 560 (A5) or 794 (A4) for a paper feel — the readout shows millimetres. The board zooms, so use what reads best.",
+        aliases: ["卡片", "宽度", "栏宽", "版心", "纸张", "尺寸", "网页", "A4", "A5", "A6", "card", "width", "column", "paper", "size", "web", "board"],
       },
       {
         control: "slider",
