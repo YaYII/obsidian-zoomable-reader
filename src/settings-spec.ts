@@ -62,6 +62,32 @@ export interface ZoomableReaderSettings {
   rememberPosition: boolean;
 }
 
+/* --------------------------------------------------------------- 纸张尺寸
+ * 白板的卡片是一张「纸」：默认按 A5 走（148mm 宽），因为它最接近中文正文的舒适行长
+ * （A5 宽 148mm 在 96dpi 下约 559~560px，15~16px 中文一行 35 字上下，正是书的行长）。
+ * 换算按 CSS 的 96dpi：px = mm / 25.4 * 96。 */
+export const PAPER_WIDTHS_PX = { A6: 397, A5: 560, A4: 794 } as const;
+export type PaperName = keyof typeof PAPER_WIDTHS_PX;
+
+/** 这个宽度是不是某张标准纸（容差 8px：滑块步长 10px，落点不会精确到小数点）。 */
+export function paperNameFor(width: number, tolerance: number = 8): PaperName | null {
+  for (const name of Object.keys(PAPER_WIDTHS_PX) as PaperName[]) {
+    if (Math.abs(PAPER_WIDTHS_PX[name] - width) <= tolerance) return name;
+  }
+  return null;
+}
+
+/** CSS 像素 → 毫米（96dpi）：设置页里让用户看到自己选的是多大一张纸。 */
+export function widthToMm(width: number): number {
+  return Math.round((width / 96) * 25.4);
+}
+
+/** 设置页里滑块右侧的读数：「560 px ≈ A5 · 148mm」。 */
+export function cardWidthLabel(width: number): string {
+  const paper = paperNameFor(width);
+  return width + " px" + (paper ? " ≈ " + paper : "") + " · " + widthToMm(width) + "mm";
+}
+
 export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   pinchZoom: true,
   pinchSensitivity: 1,
@@ -72,7 +98,9 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   defaultMode: "page",
   showToolbar: true,
   padding: 16,
-  boardCardWidth: 320,
+  /* 默认 A5：卡片就是一张纸（148mm 宽 ≈ 560px）。以前是 320px，正文一行只有二十来个字，
+   * 既不像纸也太窄 —— 用户实测反馈「白板看起来尺寸很小」。 */
+  boardCardWidth: PAPER_WIDTHS_PX.A5,
   boardMaxDepth: 3,
   boardGap: 32,
   boardConnectors: true,
@@ -277,22 +305,22 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
   {
     zh: "白板模式",
     en: "Whiteboard mode",
-    zhIntro: "白板模式把一篇 Markdown 编译成一张卡片画布：每个标题是一张卡，卡里是这一节的正文，卡片之间连出大纲。",
-    enIntro: "Whiteboard compiles a note into a card canvas: every heading is a card holding that section's content, and connectors draw the outline.",
+    zhIntro: "白板模式把一篇 Markdown 编译成一张卡片画布：每个标题是一张卡，卡里是这一节的正文，卡片之间连出大纲。默认卡片按 A5 纸走（148mm），打开即原大；每次进白板都重新编译一遍，笔记改了白板跟着变（只读，不落盘）。",
+    enIntro: "Whiteboard compiles a note into a card canvas: every heading is a card holding that section's content, and connectors draw the outline. Cards default to A5 paper (148mm) and open at natural size; the board is recompiled every time you enter it and follows the note as you edit (read-only, nothing is written).",
     items: [
       {
         control: "slider",
         id: "board-card-width",
         key: "boardCardWidth",
-        min: 220,
-        max: 520,
-        step: 20,
-        format: (v) => v + " px",
-        zh: "卡片宽度",
-        en: "Card width",
-        zhDesc: "手机上 300 左右一屏刚好一张卡；越大越像一页纸，越小越像思维导图。",
-        enDesc: "Around 300 shows one card per screen on a phone. Wider reads like a page, narrower like a mind map.",
-        aliases: ["卡片", "宽度", "白板", "card", "width", "board"],
+        min: 320,
+        max: 900,
+        step: 10,
+        format: cardWidthLabel,
+        zh: "卡片宽度（纸张大小）",
+        en: "Card width (paper size)",
+        zhDesc: "默认 A5（148mm ≈ 560px）：卡片就是一张纸，一行 30~40 个汉字，接近书的行长。A4 更宽、A6 更窄；白板本身可以捏合缩放，选自己顺眼的。",
+        enDesc: "Defaults to A5 (148mm, about 560px): a card is a sheet of paper, 30-40 Chinese characters per line. A4 is wider, A6 narrower; the board itself zooms, so pick what reads best.",
+        aliases: ["卡片", "宽度", "纸张", "尺寸", "A4", "A5", "A6", "card", "width", "paper", "size", "board"],
       },
       {
         control: "slider",

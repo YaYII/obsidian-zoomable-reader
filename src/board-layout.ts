@@ -155,18 +155,20 @@ export function layoutBoard(doc: BoardDoc, options: Partial<BoardLayoutOptions> 
   const byId: Record<string, BoardCard> = {};
   const stepX = cardWidth + opts.gapX;
 
-  /* 摆放以「垂直中心线」为基准：
-   *   ① 卡片自己在子树带里居中（子树比卡片高时）；
-   *   ② 子卡带整体也对着卡片的中心（卡片比子树高时）。
-   * 两个方向都居中，于是「一条单链」不会偏到卡片顶端，父子连线永远水平收口。 */
-  const place = (id: string, centerY: number): void => {
+  /* 摆放以「顶部」为基准：卡片的顶 = 它那条子树带的顶，子卡从同一个顶往下排。
+   *
+   * 为什么不用「父子垂直居中」（经典 mindmap 的做法）：白板是拿来【读文档】的。
+   * 居中的话，一张短卡面对一列很高的子卡时会被推到中间，屏幕上出现一大片空白 ——
+   * 实测就是这样：打开白板，可见区域的上半屏全是空的，看着「尺寸很小」。
+   * 顶部对齐之后，左上角就是内容，往下读就是下一张卡，和读纸一样。 */
+  const place = (id: string, top: number): void => {
     const node = doc.byId[id];
     if (!node) return;
     const height = heights[id];
     const card: BoardCard = {
       id: id,
       x: opts.padding + node.depth * stepX,
-      y: Math.round(centerY - height / 2),
+      y: Math.round(top),
       width: cardWidth,
       height: height,
       depth: node.depth,
@@ -174,18 +176,13 @@ export function layoutBoard(doc: BoardDoc, options: Partial<BoardLayoutOptions> 
     cards.push(card);
     byId[id] = card;
 
-    let childrenHeight = 0;
-    node.children.forEach((childId, i) => {
-      childrenHeight += (subtree[childId] || 0) + (i > 0 ? opts.gapY : 0);
-    });
-    let cursor = centerY - childrenHeight / 2;
+    let cursor = top;
     for (const childId of node.children) {
-      const band = subtree[childId] || 0;
-      place(childId, cursor + band / 2);
-      cursor += band + opts.gapY;
+      place(childId, cursor);
+      cursor += (subtree[childId] || 0) + opts.gapY;
     }
   };
-  place(doc.rootId, opts.padding + subtree[doc.rootId] / 2);
+  place(doc.rootId, opts.padding);
 
   const links: BoardLink[] = [];
   for (const card of cards) {

@@ -13,9 +13,10 @@ wheel on desktop, drag to pan.
 
 ## 中文速览
 
-- **白板模式**：把一篇 Markdown 编译成白板 —— 每个标题一张卡，卡里是这一节的正文，卡片之间
-  连出大纲。手机上一眼看到结构，捏合放大读细节，点卡片标题把这张卡放到眼前。
-  设置 → **白板模式 → 打开笔记时的默认模式 → 白板**，之后就默认进白板。
+- **白板模式**：把一篇 Markdown 编译成白板 —— 每个标题一张卡（**默认 A5 纸大小，148mm**），
+  卡里是这一节的正文，卡片之间连出大纲。打开即**原大**（不再缩成一小块），手机上一眼看到结构，
+  捏合放大读细节，点卡片标题把这张卡放到眼前。**每次进白板都重新编译一遍**，笔记改了白板跟着变
+  （只读，不落盘）。设置 → **白板模式 → 打开笔记时的默认模式 → 白板**，之后就默认进白板。
 - **双指捏合在哪**：设置页第一组就是 **手势与缩放 → 双指捏合缩放**（还有一张「手势速查」表）。
   手机上要能缩放，必须用**本插件的视图**打开笔记（侧边栏放大镜图标、命令面板，或文件列表长按
   → 「编译成白板」）—— Obsidian 自带的阅读视图无法缩放，这是应用层限制，任何主题都改不了。
@@ -84,15 +85,28 @@ This is not "the note floating on a board" — the Markdown itself is compiled:
   levels deep, and one column per level turns the board into a thin ribbon. Set the depth in the
   settings; a **card limit** folds deeper automatically, so a note with hundreds of headings cannot
   stall a phone.
+- **Parents sit at the top of their children, not in the middle.** A classic tidy tree centres a
+  parent against its children band, which on a document board pushes a short title card into the
+  middle of the screen and leaves the top half empty — reported as "the whiteboard looks tiny".
+  Top-aligned, the top-left corner is content and you read downward, like paper.
 - **Tap a card title to bring it to the front** (240 ms transition), **回到全图** to see the whole
   outline, and dragging empty space pans the board as usual. Links inside a card keep their normal
   meaning — only the card head and its focus button zoom.
 
 ![The whole board at 24%, fit to a phone screen](docs/images/screenshot-board-fit.png)
 
-Whiteboard settings: **打开笔记时的默认模式 / default mode**, **卡片宽度 / card width**
-(220–520 px), **卡片展开层级 / outline depth** (H1–H6), **卡片间距 / card spacing**,
-**显示连线 / connectors**, **卡片数量上限 / card limit**.
+Whiteboard settings: **打开笔记时的默认模式 / default mode**, **卡片宽度（纸张大小） / card
+width (paper size)** (320–900 px, default 560 px ≈ A5), **卡片展开层级 / outline depth** (H1–H6),
+**卡片间距 / card spacing**, **显示连线 / connectors**, **卡片数量上限 / card limit**.
+
+Paper first: a card is a sheet. A5 (148 mm ≈ 560 px at 96 dpi) gives roughly 30–40 Chinese
+characters per line, which is what a book does; A4 is wider, A6 narrower. The board opens at
+**natural size** — one A5 page, not a fit-everything miniature — and pans and pinches from there.
+
+The board is a *view*: it is recompiled every time you enter whiteboard mode, and it recompiles
+again whenever the note changes (a save, or live typing in another pane, throttled to 400 ms).
+Nothing is written back. There is a **重新编译 / recompile** button in the toolbar if you want to
+force a refresh.
 
 ## Privacy and disclosures
 
@@ -116,7 +130,7 @@ Obsidian 1.13+ **settings search** — typing 双指 or pinch jumps straight to 
 | 打开笔记时的默认模式 / Default mode | 版面 page | 版面 page or 白板 whiteboard |
 | 显示工具条 / Show toolbar | on | Zoom buttons, zoom level, mode switch, fit |
 | 版心四周留白 / Page padding | 16 px | Gap between the note and the edge (page mode) |
-| 卡片宽度 / Card width | 320 px | Whiteboard card width |
+| 卡片宽度（纸张大小）/ Card width (paper) | 560 px ≈ A5 | Whiteboard card width; A5 = 148 mm, A4/A6 also easy to pick |
 | 卡片展开层级 / Outline depth | H3 | Headings deeper than this fold into the ancestor card |
 | 卡片间距 / Card spacing | 32 px | Vertical gap; parent-to-child spacing is 2.5x that |
 | 显示连线 / Show connectors | on | Parent-to-child bezier connectors |

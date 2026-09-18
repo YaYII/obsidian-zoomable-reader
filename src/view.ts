@@ -1,4 +1,4 @@
-import { Component, ItemView, MarkdownRenderer, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { Component, ItemView, MarkdownView, MarkdownRenderer, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type ZoomableReaderPlugin from "../main";
 import { foldToFit, parseBoard, type BoardDoc } from "./board-model";
 import { DEFAULT_BOARD_LAYOUT } from "./board-layout";
@@ -117,6 +117,7 @@ export class ZoomableReaderView extends ItemView {
       if (this.mode === "board") {
         this.makeButton(bar, "scan", "回到全图 / Fit the whole board", () => this.fitBoard());
         this.makeButton(bar, "focus", "回到标题卡 / Back to the title card", () => this.focusRoot());
+        this.makeButton(bar, "refresh-cw", "重新编译 / Recompile now", () => void this.recompile());
       } else {
         this.makeButton(bar, "move-horizontal", "适配宽度 / Fit width", () => {
           if (this.layer) this.layer.fitWidth(this.plugin.settings.padding);
@@ -162,6 +163,22 @@ export class ZoomableReaderView extends ItemView {
       { capture: true }
     );
 
+    /* 只读视图也要「跟着变」：笔记保存了、或另一个标签页里正在改字，
+     * 白板自动重新编译（节流 400ms，避免每敲一个字就整块重排）。
+     * 这样「点白板 = 现读现编译」在打开期间也一直成立。 */
+    this.registerEvent(
+      this.app.vault.on("modify", (changed) => {
+        if (this.mode !== "board" || !this.file || changed.path !== this.file.path) return;
+        this.scheduleRerender(400);
+      })
+    );
+    this.registerEvent(
+      this.app.workspace.on("editor-change", (_editor, info) => {
+        if (this.mode !== "board" || !this.file) return;
+        if (!info || !info.file || info.file.path !== this.file.path) return;
+        this.scheduleRerender(400);
+      })
+    );
   }
 
   /** 键盘：+ / - / 0，与多数看图工具一致。
@@ -273,7 +290,7 @@ export class ZoomableReaderView extends ItemView {
   private onTransform(t: Transform): void {
     if (this.labelEl) this.labelEl.setText(formatPercent(t.scale));
     if (this.file && this.plugin.settings.rememberPosition) {
-      this.plugin.rememberPosition(this.file.path, this.mode, t);
+      this.plugin.rememberPosition(this.file.path, this.mode, t, this.plugin.settings.boardCardWidth);
     }
   }
 
@@ -298,7 +315,13 @@ export class ZoomableReaderView extends ItemView {
     this.scheduleRerender();
   }
 
-  private scheduleRerender(): void {
+  /** 重新编译当前白板（工具条上的「重新编译」按钮走它）。
+   * 每次进白板、每次笔记改动都会重新编译一遍 —— 只读视图，不落盘、不缓存。 */
+  async recompile(): Promise<void> {
+    if (this.file) await this.renderFile(this.file);
+  }
+
+  private scheduleRerender(delay: number = 220): void {
     if (this.rerenderTimer !== null) window.clearTimeout(this.rerenderTimer);
     this.rerenderTimer = window.setTimeout(() => {
       this.rerenderTimer = null;
@@ -308,7 +331,7 @@ export class ZoomableReaderView extends ItemView {
       void this.renderFile(file).then(() => {
         if (transform && this.layer) this.layer.setTransform(transform, false);
       });
-    }, 220);
+    }, delay);
   }
 
   /* ------------------------------------------------------------------ 渲染 */
@@ -360,13 +383,32 @@ export class ZoomableReaderView extends ItemView {
     }
   }
 
+  /**
+   * 取「此刻的正文」。
+   *
+   * 白板是【查看】而不是编辑：每次进白板都重新编译一遍，代价小、心里有底。
+   * 所以刻意不用 cachedRead（它有缓存，改完字白板可能还是旧的）：
+   *   ① 文件同时开在某个 Markdown 标签页里 → 直接读编辑器里的实时文本（含还没保存的改动）；
+   *   ② 否则读一遍文件本体。
+   */
+  private async readSource(file: TFile): Promise<string> {
+    const leaves = this.app.workspace.getLeavesOfType("markdown");
+    for (const leaf of leaves) {
+      const view = leaf.view;
+      if (view instanceof MarkdownView && view.file && view.file.path === file.path) {
+        return view.editor.getValue();
+      }
+    }
+    return this.app.vault.read(file);
+  }
+
   /** 白板模式：把 Markdown 编译成卡片画布（标题成卡、正文成块、大纲成连线）。 */
   private async renderBoard(file: TFile): Promise<void> {
     const host = this.boardHostEl;
     if (!host) return;
     const component = this.beginRenderComponent();
 
-    const markdown = await this.app.vault.cachedRead(file);
+    const markdown = await this.readSource(file);
     const parsed = parseBoard(markdown, { title: file.basename });
     const fitted = foldToFit(parsed, this.plugin.settings.boardMaxDepth, this.plugin.settings.boardMaxCards);
     this.doc = fitted.doc;
@@ -399,12 +441,16 @@ export class ZoomableReaderView extends ItemView {
     }
     this.board = rendered;
 
-    const saved = this.plugin.settings.rememberPosition ? this.plugin.getPosition(file.path, "board") : null;
-    if (saved) {
-      if (this.layer) this.layer.setTransform(saved);
-    } else {
-      this.focusRoot();
-    }
+    /* 首次打开（没有存过位置）：按【原大】显示 —— A5 宽 148mm 就是一张纸的尺寸。
+     * 以前这里聚焦到标题卡，而标题卡只有标题与「N 张卡片」那一行，于是屏幕中间只有一小块，
+     * 用户实测反馈「白板看起来尺寸很小」。
+     * 白板本来就能捏合缩放，默认宁可按纸的真实尺寸给，让用户自己缩，而不是替他缩好。 */
+    const saved = this.plugin.settings.rememberPosition
+      ? this.plugin.getPosition(file.path, "board", this.plugin.settings.boardCardWidth)
+      : null;
+    if (!this.layer) return;
+    if (saved) this.layer.setTransform(saved);
+    else this.layer.reset(this.padding);
   }
 
   /** 根卡上的一行元信息：这张白板有多少卡、展开到第几层。 */

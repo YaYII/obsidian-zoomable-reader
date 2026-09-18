@@ -61,15 +61,17 @@ describe("layoutBoard：白板几何", () => {
     expect(layout.byId["n1"].x - layout.byId.root.x).toBeCloseTo(320 + 88, 6);
   });
 
-  it("父卡与它的子卡带垂直中心对齐（连线水平收口，不会斜插）", () => {
+  it("父卡的顶 = 子卡带的顶（自上而下读，打开时不会有一大块上方留白）", () => {
     for (const node of doc.nodes) {
       if (node.children.length === 0) continue;
       const parent = layout.byId[node.id];
-      const kids = node.children.map((id) => layout.byId[id]);
-      const top = Math.min(...kids.map((c) => c.y));
-      const bottom = Math.max(...kids.map((c) => c.y + c.height));
-      expect(parent.y + parent.height / 2).toBeCloseTo((top + bottom) / 2, 0);
+      const first = layout.byId[node.children[0]];
+      expect(first.y).toBeCloseTo(parent.y, 6);
     }
+  });
+
+  it("根卡贴着上边距（打开即原大时，可见区顶部就是内容）", () => {
+    expect(layout.byId.root.y).toBeCloseTo(DEFAULT_BOARD_LAYOUT.padding, 6);
   });
 
   it("子卡永远在父卡右边（左→右读大纲）", () => {

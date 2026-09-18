@@ -3,6 +3,13 @@ import { ZoomPanLayer, formatPercent, fitRect, BOARD_MIN_SCALE } from "../../src
 import { ImageLightbox, installZoomAffordance } from "../../src/lightbox";
 import { DEFAULT_DIAGRAM_LAYOUT, applyDiagramLayout, mergeDiagramConfig } from "../../src/diagram-layout";
 import { classifyBlock, foldBoard, foldToFit, parseBoard, plainText } from "../../src/board-model";
+import {
+  DEFAULT_SETTINGS,
+  PAPER_WIDTHS_PX,
+  cardWidthLabel,
+  paperNameFor,
+  widthToMm,
+} from "../../src/settings-spec";
 import { DEFAULT_BOARD_LAYOUT, cardAt, estimateCardHeight, layoutBoard, linkPath } from "../../src/board-layout";
 import {
   BOARD_CLASS,
@@ -39,6 +46,13 @@ declare global {
       classify: typeof classifyBlock;
       plainText: typeof plainText;
     };
+    ZoomableReaderDefaults: typeof DEFAULT_SETTINGS;
+    Paper: {
+      widths: typeof PAPER_WIDTHS_PX;
+      nameFor: typeof paperNameFor;
+      toMm: typeof widthToMm;
+      label: typeof cardWidthLabel;
+    };
     BoardLayout: {
       layout: typeof layoutBoard;
       linkPath: typeof linkPath;
@@ -71,6 +85,8 @@ window.ZoomPanFormat = { percent: formatPercent, fitRect: fitRect, boardMinScale
 window.ImageLightbox = ImageLightbox;
 window.installZoomAffordance = installZoomAffordance;
 window.DiagramLayout = { apply: applyDiagramLayout, merge: mergeDiagramConfig, defaults: DEFAULT_DIAGRAM_LAYOUT };
+window.ZoomableReaderDefaults = DEFAULT_SETTINGS;
+window.Paper = { widths: PAPER_WIDTHS_PX, nameFor: paperNameFor, toMm: widthToMm, label: cardWidthLabel };
 window.BoardModel = { parse: parseBoard, fold: foldBoard, foldToFit: foldToFit, classify: classifyBlock, plainText: plainText };
 window.BoardLayout = { layout: layoutBoard, linkPath: linkPath, estimateCardHeight: estimateCardHeight, cardAt: cardAt, defaults: DEFAULT_BOARD_LAYOUT };
 window.BoardRender = {

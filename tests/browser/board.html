@@ -115,7 +115,9 @@ var host = document.getElementById("host");
 var label = document.getElementById("label");
 
 var settings = {
-  cardWidth: 300,
+  /* 卡片宽度直接取插件的出厂默认（A5 = 148mm ≈ 560px）——
+   * 验证器就不用把数字抄一遍，默认值改了两边一起动。 */
+  cardWidth: window.ZoomableReaderDefaults.boardCardWidth,
   gap: 32,
   padding: 40,
   connectors: true,
@@ -265,7 +267,9 @@ function visibleCards() {
   window.BoardRender.applyModeClasses(rootEl, settings.mode);
   await rerender();
   buildLayer();
-  focusCard(model.doc.rootId, false);
+  /* 与插件一致：首次打开按【原大】显示一张 A5 纸，而不是缩到整块白板。
+     第二个参数是视口留白（插件里用设置中的「版心四周留白」，默认 16） */
+  layer.reset(16);
 
   var vrect = function () { var r = viewport.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; };
 
@@ -294,12 +298,23 @@ function visibleCards() {
       }
       return out;
     },
+    /* 卡片标题栏在视口里的位置：按屏幕坐标点它，才不受当前缩放影响 ——
+     * 缩到 14% 时整张卡只有二十来像素高，拿「卡顶 + 14px」去点会落到正文里。 */
+    cardHeadBox: function (id) {
+      var card = host.querySelector("[" + window.BoardRender.classes.cardAttr + '="' + id + '"]');
+      var head = card ? card.querySelector("." + window.BoardRender.classes.head) : null;
+      if (!head) return null;
+      var v = vrect();
+      var r = head.getBoundingClientRect();
+      return { left: r.left - v.left, top: r.top - v.top, width: r.width, height: r.height };
+    },
     contentPoint: function (px, py) { var t = layer.transform; return { x: (px - t.x) / t.scale, y: (py - t.y) / t.scale }; },
     focusCard: focusCard,
     fitBoard: function () { layer.focusRect({ x: 0, y: 0, width: board.layout.width, height: board.layout.height }, 16); },
     reset: function (padding) { layer.reset(padding === undefined ? 16 : padding); },
     setPinch: function (on) { settings.pinch = !!on; buildLayer(); },
     setModeClasses: function (mode) { window.BoardRender.applyModeClasses(rootEl, mode); },
+    cardWidth: function () { return settings.cardWidth; },
     modeClasses: function () { return rootEl.className; },
     renderFileMode: renderFileMode,
     renderWithoutModeClasses: renderWithoutModeClasses,

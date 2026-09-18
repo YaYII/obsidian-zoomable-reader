@@ -5,6 +5,12 @@ import { ImageLightbox, installZoomAffordance } from "./src/lightbox";
 import { ZoomableReaderSettingTab, ZoomableReaderSettings } from "./src/settings";
 import type { ReaderMode, ZoomButtonCorner } from "./src/settings-spec";
 import { BOARD_MIN_SCALE, MIN_SCALE, Transform, normalizeTransform } from "./src/zoom-pan";
+
+/** 存下来的变换，外加「当时用的卡片宽度」：白板的几何由卡片宽度决定，
+ *  宽度变了旧位置就不适用了（否则用户改完纸张大小会在板子上落到莫名其妙的地方）。 */
+interface StoredTransform extends Transform {
+  card?: number;
+}
 import { VIEW_TYPE_ZOOMABLE_READER, ZoomableReaderView } from "./src/view";
 
 const POSITION_SEPARATOR = "#board";
@@ -14,7 +20,7 @@ export default class ZoomableReaderPlugin extends Plugin {
   /** 每篇笔记的缩放与位置：只存在本地 data.json，不做任何网络请求。
    *  键 = 笔记路径（版面模式）或路径 + "#board"（白板模式）—— 两种模式的
    *  内容尺寸完全不同，共用一份缩放会互相踩。 */
-  positions: Record<string, Transform> = {};
+  positions: Record<string, StoredTransform> = {};
   private saveTimer: number | null = null;
   private lightbox: ImageLightbox | null = null;
   private detachAffordance: (() => void) | null = null;
@@ -262,13 +268,21 @@ export default class ZoomableReaderPlugin extends Plugin {
     return mode === "board" ? path + POSITION_SEPARATOR : path;
   }
 
-  getPosition(path: string, mode: ReaderMode = "page"): Transform | null {
+  getPosition(path: string, mode: ReaderMode = "page", cardWidth?: number): Transform | null {
     const min = mode === "board" ? BOARD_MIN_SCALE : MIN_SCALE;
-    return normalizeTransform(this.positions[this.keyFor(path, mode)], min, this.settings.maxScale);
+    const raw = this.positions[this.keyFor(path, mode)] as StoredTransform | undefined;
+    if (!raw) return null;
+    /* 白板：卡片宽度变了，旧位置就不算数（几何全变了）——回到「原大」比落到乱处好。 */
+    if (mode === "board" && typeof cardWidth === "number" && typeof raw.card === "number") {
+      if (Math.abs(raw.card - cardWidth) > 0.5) return null;
+    }
+    return normalizeTransform(raw, min, this.settings.maxScale);
   }
 
-  rememberPosition(path: string, mode: ReaderMode, t: Transform): void {
-    this.positions[this.keyFor(path, mode)] = { scale: t.scale, x: t.x, y: t.y };
+  rememberPosition(path: string, mode: ReaderMode, t: Transform, cardWidth?: number): void {
+    const entry: StoredTransform = { scale: t.scale, x: t.x, y: t.y };
+    if (mode === "board" && typeof cardWidth === "number") entry.card = cardWidth;
+    this.positions[this.keyFor(path, mode)] = entry;
     this.scheduleSave();
   }
 
@@ -297,7 +311,7 @@ export default class ZoomableReaderPlugin extends Plugin {
       this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
     }
     if (data && data.positions) {
-      const restored: Record<string, Transform> = {};
+      const restored: Record<string, StoredTransform> = {};
       for (const key of Object.keys(data.positions)) {
         const min = key.endsWith(POSITION_SEPARATOR) ? BOARD_MIN_SCALE : MIN_SCALE;
         const t = normalizeTransform(data.positions[key], min, this.settings.maxScale);

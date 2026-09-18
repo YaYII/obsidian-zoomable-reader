@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ALL_SETTING_SPECS, DEFAULT_SETTINGS, SETTINGS_GROUPS } from "../src/settings-spec";
+import {
+  ALL_SETTING_SPECS,
+  DEFAULT_SETTINGS,
+  PAPER_WIDTHS_PX,
+  SETTINGS_GROUPS,
+  cardWidthLabel,
+  paperNameFor,
+  widthToMm,
+} from "../src/settings-spec";
 
 /* 「设置页中英对照」不是文案偏好，是这次用户明确提的需求（他找不到「双指」在哪）。
  * 所以用测试把它钉住：每一项都必须有中文名 + 英文名、双语说明、双语搜索别名。
@@ -80,6 +88,34 @@ describe("设置页的双语契约", () => {
         expect(label, spec.id + " 的选项文案必须中英对照").toMatch(LATIN);
       }
     }
+  });
+});
+
+describe("纸张尺寸：默认 A5（用户要求「默认要 A5，这符合纸张的大小」）", () => {
+  it("默认卡片宽 = A5 宽（148mm 在 96dpi 下 ≈ 560px）", () => {
+    expect(paperNameFor(DEFAULT_SETTINGS.boardCardWidth)).toBe("A5");
+    expect(widthToMm(DEFAULT_SETTINGS.boardCardWidth)).toBe(148);
+    expect(Math.abs(DEFAULT_SETTINGS.boardCardWidth - (148 / 25.4) * 96)).toBeLessThanOrEqual(1);
+  });
+
+  it("三张常见纸都能被认出来（A6 / A5 / A4）", () => {
+    expect(paperNameFor(PAPER_WIDTHS_PX.A6)).toBe("A6");
+    expect(paperNameFor(PAPER_WIDTHS_PX.A5)).toBe("A5");
+    expect(paperNameFor(PAPER_WIDTHS_PX.A4)).toBe("A4");
+    expect(paperNameFor(500)).toBeNull();
+  });
+
+  it("滑块读数带毫米与纸名（用户按「多大一张纸」来选，而不是按像素）", () => {
+    expect(cardWidthLabel(DEFAULT_SETTINGS.boardCardWidth)).toContain("A5");
+    expect(cardWidthLabel(DEFAULT_SETTINGS.boardCardWidth)).toContain("148mm");
+    expect(cardWidthLabel(500)).toContain("132mm");
+  });
+
+  it("A4 也在滑块能选到的范围内", () => {
+    const spec = ALL_SETTING_SPECS.find((s) => s.id === "board-card-width");
+    expect(spec?.control).toBe("slider");
+    const slider = spec as { min: number; max: number };
+    expect(slider.max).toBeGreaterThanOrEqual(PAPER_WIDTHS_PX.A4);
   });
 });
 

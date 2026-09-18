@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.3.2
+
+- **Cards are paper now: A5 by default (148 mm ≈ 560 px).** The default card width was 320 px, so a
+  card held only about twenty Chinese characters per line and the board read like a narrow strip
+  rather than a page — reported as "the whiteboard looks tiny". A5 is the width a Chinese book line
+  actually uses (30–40 characters), so it is now the default; A6 and A4 are one slider step away and
+  the readout shows millimetres and the paper name (`560 px ≈ A5 · 148mm`).
+- **The board opens at natural size (100%), not fitted.** Previously it focused the title card —
+  which holds a title and a card count and nothing else — so the screen showed one small box in the
+  middle. Now it opens at 100% with the root card in the top-left corner: one A5 page at reading
+  size. The board still zooms and pans, and 回到全图 / 回到标题卡 are still in the toolbar.
+- **Parents are top-aligned with their children, not centred against them.** A tidy tree centres a
+  parent against its children band; on a document board that pushes a short title card into the
+  middle of the screen and leaves the top half empty — the other half of "it looks tiny". Top
+  aligned, the top-left corner is content and you read downward, like paper.
+- **The whiteboard is a view: it recompiles every time.** Entering whiteboard mode compiles the
+  Markdown again from scratch, reading the live editor text when the note is open in a pane (so
+  unsaved edits show up), and it recompiles again when the note changes — a save, or typing in
+  another pane, throttled to 400 ms. Nothing is written back, and there is a new
+  **重新编译 / recompile** button in the toolbar for a forced refresh.
+- Board positions are now keyed by card width: change the paper size and the saved zoom/pan is
+  dropped rather than restored onto a board whose geometry no longer matches.
+
+Verification: `npm run verify:board` is now 42 assertions — the new ones assert the shipped
+default is A5 (`560 px ≈ A5 · 148mm`, from the real settings data, not a number copied into the
+test), that opening lands at scale 1 with content within one margin of the top-left corner, and that
+every card's real DOM width equals the configured paper width.
+
 ## 1.3.1
 
 - **Fixed: opening a note as a whiteboard showed an empty view.** Obsidian's view lifecycle is

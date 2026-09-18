@@ -62,6 +62,27 @@ function overlap(a, b, tol = 0.6) {
   return a.left < b.left + b.width - tol && b.left < a.left + a.width - tol && a.top < b.top + b.height - tol && b.top < a.top + a.height - tol;
 }
 
+/**
+ * 挑一张「点得到」的卡：优先完整落在视口里的叶子卡。
+ * 卡片是 A5（560px）之后，窄屏上往往没有一张能完整放下 —— 那就先回到全图再挑，
+ * 否则测试会拿一个屏幕外的坐标去点（点不到不是插件的错，是测试没准备好）。
+ */
+async function pickClickableCard(page, viewport, model) {
+  const leafIds = new Set(model.filter((n) => n.children.length === 0 && n.depth > 0).map((n) => n.id));
+  const read = () => page.evaluate(() => window.harness.domCards());
+  const inside = (c) => c.left >= 0 && c.top >= 0 && c.left + c.width <= viewport.width && c.top + c.height <= viewport.height;
+  let cards = (await read()).filter(inside);
+  if (cards.length === 0) {
+    await page.evaluate(() => window.harness.fitBoard());
+    await page.waitForTimeout(140);
+    cards = (await read()).filter(inside);
+  }
+  if (cards.length === 0) return null;
+  const rect = cards.find((c) => leafIds.has(c.id)) || cards[cards.length - 1];
+  const node = model.find((n) => n.id === rect.id);
+  return node ? { node: node, rect: rect } : null;
+}
+
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 
 try {
@@ -78,14 +99,37 @@ try {
   const rect = await page.evaluate(() => window.harness.rect());
   const model = await page.evaluate(() => window.harness.modelCards());
   const boardSize = await page.evaluate(() => window.harness.board());
-  const snapshot = await page.evaluate(() => window.harness.snapshot());
+  const snapshot = Object.assign(
+    await page.evaluate(() => window.harness.snapshot()),
+    { cardWidth: await page.evaluate(() => window.harness.cardWidth()) }
+  );
   const contentPointAt = (cx, cy) =>
     page.evaluate(
       (args) => window.harness.contentPoint(args[0] - window.harness.rect().left, args[1] - window.harness.rect().top),
       [cx, cy]
     );
 
-  // ① 编译：Markdown 的每个标题都成了一张卡
+  // ① 出厂默认：卡片就是一张 A5 纸，且打开即原大（用户反馈「白板看起来尺寸很小」的对策）
+  const defaults = await page.evaluate(() => ({
+    width: window.ZoomableReaderDefaults.boardCardWidth,
+    paper: window.Paper.nameFor(window.ZoomableReaderDefaults.boardCardWidth),
+    mm: window.Paper.toMm(window.ZoomableReaderDefaults.boardCardWidth),
+    label: window.Paper.label(window.ZoomableReaderDefaults.boardCardWidth),
+    mode: window.ZoomableReaderDefaults.defaultMode,
+  }));
+  assert(defaults.paper === "A5", "默认卡片宽度 = A5 纸（148mm）", defaults.width + "px · " + defaults.mm + "mm · " + defaults.label);
+  assert(Math.abs(defaults.width - 560) <= 4, "A5 在 96dpi 下的像素值正确（148 / 25.4 × 96 ≈ 560）", defaults.label);
+  assert(near(snapshot.scale, 1, 0.001), "打开白板即 100% 原大（不再缩到整块板/标题卡）", "scale=" + fmt(snapshot.scale));
+  const openDom = await page.evaluate(() => window.harness.domCards());
+  const topMost = Math.min(...openDom.map((c) => c.top));
+  const leftMost = Math.min(...openDom.map((c) => c.left));
+  /* 白板自身留白 40 + 视口留白 16 = 56：内容就该从这个位置开始，
+   * 而不是像「父子垂直居中」时那样被推到屏幕中段（那才是用户看到的「一大块空白」）。 */
+  assert(
+    topMost <= 60 && leftMost <= 60,
+    "打开即原大：内容贴着左上角（不再有一大片上方留白，看着「很小」）",
+    "最上面的卡 top=" + fmt(topMost) + "，最左的卡 left=" + fmt(leftMost)
+  );
   assert(snapshot.cards === model.length && model.length >= 5, "每个标题都编译成一张卡", "卡片 " + snapshot.cards + " / 模型节点 " + model.length);
   assert(model.some((n) => n.title.indexOf("手势清单") >= 0), "中文标题原样成卡", model.map((n) => n.title).slice(0, 4).join(" / "));
 
@@ -96,6 +140,11 @@ try {
   const dom = await page.evaluate(() => window.harness.domCards());
   const links = await page.evaluate(() => window.harness.links());
   const byId = new Map(layout.map((c) => [c.id, c]));
+  assert(
+    layout.every((c) => Math.abs(c.width - snapshot.cardWidth) < 0.5),
+    "每张卡的宽度都等于设置里的纸张宽度（A5 一列到底）",
+    layout[0].width + "px"
+  );
 
   const overlapping = [];
   for (let i = 0; i < dom.length; i += 1) {
@@ -220,15 +269,13 @@ try {
   // ⑧ 点卡片标题 = 把这张卡放到眼前（并在视口内完整可见）
   await page.evaluate(() => window.harness.reset(16));
   await page.waitForTimeout(40);
-  /* 挑一张【当前真的看得见】的卡来点：视野外的卡点不到（这是测试自己的事，
-   * 不是插件的事）—— 优先挑叶子卡，这样聚焦后能断言「完整落在视口内」。 */
-  const leafIds = new Set(model.filter((n) => n.children.length === 0 && n.depth > 0).map((n) => n.id));
-  const visibleNow = (await page.evaluate(() => window.harness.domCards())).filter(
-    (c) => c.left >= 0 && c.top >= 0 && c.left + c.width <= rect.width && c.top + c.height <= rect.height
-  );
-  const leafBefore = visibleNow.find((c) => leafIds.has(c.id)) || visibleNow[visibleNow.length - 1];
-  const leaf = model.find((n) => n.id === leafBefore.id);
-  await page.mouse.click(rect.left + leafBefore.left + leafBefore.width / 2, rect.top + leafBefore.top + 12);
+  /* 挑一张【当前真的看得见】的卡来点：视野外的卡点不到（这是测试自己的事，不是插件的事）。 */
+  const picked = await pickClickableCard(page, rect, model);
+  assert(!!picked, "能找到一张可点击的卡（用于验证点标题聚焦）", picked ? picked.node.title : "一张都点不到");
+  const leafBefore = picked.rect;
+  const leaf = picked.node;
+  const headBox = await page.evaluate((id) => window.harness.cardHeadBox(id), leaf.id);
+  await page.mouse.click(rect.left + headBox.left + headBox.width / 2, rect.top + headBox.top + headBox.height / 2);
   /* 聚焦带 240ms 过渡（.zr-animating）：必须等它走完再量，
    * 否则量到的是动画中间态（getBoundingClientRect 会跟着过渡走）。 */
   await page.waitForTimeout(420);
@@ -372,13 +419,12 @@ try {
   await mpage.evaluate(() => window.harness.reset(16));
   await mpage.waitForTimeout(40);
   const mModel = await mpage.evaluate(() => window.harness.modelCards());
-  const mLeafIds = new Set(mModel.filter((n) => n.children.length === 0 && n.depth > 0).map((n) => n.id));
-  const mVisible = (await mpage.evaluate(() => window.harness.domCards())).filter(
-    (c) => c.left >= 0 && c.top >= 0 && c.left + c.width <= mrect.width && c.top + c.height <= mrect.height
-  );
-  const mDomBefore = mVisible.find((c) => mLeafIds.has(c.id)) || mVisible[mVisible.length - 1];
-  const mLeaf = mModel.find((n) => n.id === mDomBefore.id);
-  await tap(mrect.left + mDomBefore.left + mDomBefore.width / 2, mrect.top + mDomBefore.top + 14);
+  const mPicked = await pickClickableCard(mpage, mrect, mModel);
+  assert(!!mPicked, "手机上也能找到一张可点击的卡（560px 的 A5 卡在窄屏上要先回到全图）", mPicked ? mPicked.node.title : "一张都点不到");
+  const mDomBefore = mPicked.rect;
+  const mLeaf = mPicked.node;
+  const mHeadBox = await mpage.evaluate((id) => window.harness.cardHeadBox(id), mLeaf.id);
+  await tap(mrect.left + mHeadBox.left + mHeadBox.width / 2, mrect.top + mHeadBox.top + mHeadBox.height / 2);
   await mpage.waitForTimeout(420); // 同上：等 240ms 的聚焦过渡走完
   const mDomAfter = (await mpage.evaluate(() => window.harness.domCards())).find((c) => c.id === mLeaf.id);
   assert(
