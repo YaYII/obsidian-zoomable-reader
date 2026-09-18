@@ -208,14 +208,14 @@ try {
   const photoBox = await lb.locator("#photo").boundingBox();
   const hostBox = await lb.locator("#diagram-host").boundingBox();
 
-  /* ① 悬停才出现按钮：不悬停时按钮必须不存在 */
-  const beforeHover = await lb.evaluate(() => window.lightboxHarness.affordanceVisible());
-  assert(!beforeHover, "未悬停时，右上角按钮不出现（不打扰阅读）", "visible=" + beforeHover);
+  /* ① 常驻模式（默认）：不悬停时按钮也在，而且就贴在图片右上角 */
+  const persistentVisible = await lb.evaluate(() => window.lightboxHarness.affordanceVisibleFor("photo"));
+  assert(persistentVisible, "常驻按钮：鼠标不在图上时按钮依然可见（不用去找）", "visible=" + persistentVisible);
+  const wrapped = await lb.evaluate(() => window.lightboxHarness.hostWrapped("photo"));
+  assert(wrapped, "常驻按钮：图片被包进 .zr-zoom-host（按钮跟着内容走，滚动不错位）", "wrapped=" + wrapped);
 
-  await lb.mouse.move(photoBox.x + photoBox.width / 2, photoBox.y + photoBox.height / 2);
-  await lb.waitForTimeout(120);
-  const btnBox = await lb.evaluate(() => window.lightboxHarness.affordanceBox());
-  assert(!!btnBox, "鼠标移到图片上 → 右上角出现放大按钮", btnBox ? "按钮 " + Math.round(btnBox.width) + "x" + Math.round(btnBox.height) : "未出现");
+  const btnBox = await lb.evaluate(() => window.lightboxHarness.affordanceBoxFor("photo"));
+  assert(!!btnBox, "常驻按钮存在且可定位", btnBox ? Math.round(btnBox.width) + "x" + Math.round(btnBox.height) : "未找到");
   if (btnBox) {
     const nearRight = Math.abs(photoBox.x + photoBox.width - btnBox.right - 6) <= 2;
     const nearTop = Math.abs(btnBox.top - photoBox.y - 6) <= 2;
@@ -231,10 +231,9 @@ try {
   const afterPlainClick = await lb.evaluate(() => window.lightboxHarness.isOpen());
   assert(!afterPlainClick, "桌面上直接点图片不会打开查看器（点击保持原意）", "open=" + afterPlainClick);
 
-  /* ③ 点按钮才打开 */
-  await lb.mouse.move(photoBox.x + photoBox.width / 2, photoBox.y + photoBox.height / 2);
-  await lb.waitForTimeout(80);
-  await lb.click(".zr-zoom-affordance");
+  /* ③ 点常驻按钮才打开 */
+  const photoBtn = await lb.evaluate(() => window.lightboxHarness.affordanceBoxFor("photo"));
+  await lb.mouse.click(photoBtn.left + photoBtn.width / 2, photoBtn.top + photoBtn.height / 2);
   await lb.waitForTimeout(150);
   const opened = await lb.evaluate(() => ({
     open: window.lightboxHarness.isOpen(),
@@ -309,13 +308,11 @@ try {
   const closedByBackground = await lb.evaluate(() => window.lightboxHarness.isOpen());
   assert(!closedByBackground, "点击空白背景也能关闭", "open=" + closedByBackground);
 
-  await lb.mouse.move(hostBox.x + hostBox.width / 2, hostBox.y + hostBox.height / 2);
-  await lb.waitForTimeout(120);
-  const diagramBtn = await lb.evaluate(() => window.lightboxHarness.affordanceBox());
+  const diagramBtn = await lb.evaluate(() => window.lightboxHarness.affordanceBoxFor("diagram"));
   const hostRight = hostBox.x + hostBox.width;
   assert(!!diagramBtn && Math.abs(hostRight - diagramBtn.right - 6) <= 2,
-    "图表容器右上角也出现同一个按钮", diagramBtn ? "容器右 " + Math.round(hostRight) + " 按钮右 " + Math.round(diagramBtn.right) : "未出现");
-  await lb.click(".zr-zoom-affordance");
+    "常驻按钮也贴在图表区域的右上角", diagramBtn ? "图表右 " + Math.round(hostRight) + " 按钮右 " + Math.round(diagramBtn.right) : "未出现");
+  await lb.mouse.click(diagramBtn.left + diagramBtn.width / 2, diagramBtn.top + diagramBtn.height / 2);
   await lb.waitForTimeout(150);
   const diagramOpen = await lb.evaluate(() => ({
     open: window.lightboxHarness.isOpen(),
@@ -335,19 +332,13 @@ try {
   for (const svgId of ["svg-viewbox", "svg-percent", "svg-fixed"]) {
     await lb.locator("#" + svgId).scrollIntoViewIfNeeded();
     const box = await lb.locator("#" + svgId).boundingBox();
-    /* 先把指针移到空白处再移进来：滚动之后指针若恰好在图上，不会重新触发 mouseover，
-     * 按钮就不会出现（这是真实行为，测试里要显式制造「移入」这个动作）。 */
-    await lb.mouse.move(4, 4);
-    await lb.waitForTimeout(40);
-    await lb.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await lb.waitForTimeout(120);
-    const btn = await lb.evaluate(() => window.lightboxHarness.affordanceBox());
+    const btn = await lb.evaluate((id) => window.lightboxHarness.affordanceBoxFor(id), svgId);
     const viewport = lb.viewportSize();
     const insideView = !!btn && btn.left >= 0 && btn.top >= 0 && btn.right <= viewport.width && btn.bottom <= viewport.height;
     const withinBox = !!btn && btn.right >= box.x && btn.left <= box.x + box.width;
-    assert(!!btn, svgId + "：悬停出现放大按钮", btn ? "有" : "无");
+    assert(!!btn, svgId + "：常驻放大按钮存在", btn ? "有" : "无");
     assert(insideView && withinBox,
-      svgId + "：按钮被夹在可视区域内且横向落在图的范围里（宽图也不会跑到屏幕外）",
+      svgId + "：按钮落在图的范围里且在可视区域内",
       btn ? "按钮 " + Math.round(btn.left) + "-" + Math.round(btn.right) + "，图 " + Math.round(box.x) + "-" + Math.round(box.x + box.width) + "，视口宽 " + viewport.width : "未出现");
     /* 用按钮坐标发真实鼠标事件：Playwright 的 click() 会因「元素在视口外」直接拒绝，
      * 而这里要验的正是「宽图的按钮也在视口内、点得到」。 */
@@ -377,6 +368,19 @@ try {
     await lb.evaluate(() => window.lightboxHarness.lightbox.close());
     await lb.waitForTimeout(100);
   }
+
+  /* ⑤ 悬停模式（设置里关掉常驻时）：不悬停不出现，悬停才出现 */
+  await lb.evaluate(() => window.lightboxHarness.setHoverMode());
+  await lb.mouse.move(4, 4);
+  await lb.waitForTimeout(120);
+  const hoverHidden = await lb.evaluate(() => window.lightboxHarness.affordanceVisible());
+  assert(!hoverHidden, "悬停模式：未悬停时按钮不出现（设置可切回这种干净的样子）", "visible=" + hoverHidden);
+  await lb.mouse.move(photoBox.x + photoBox.width / 2, photoBox.y + photoBox.height / 2);
+  await lb.waitForTimeout(120);
+  const hoverShown = await lb.evaluate(() => window.lightboxHarness.affordanceVisible());
+  assert(hoverShown, "悬停模式：指针移到图上按钮出现", "visible=" + hoverShown);
+  await lb.evaluate(() => window.lightboxHarness.setPersistentMode());
+  await lb.waitForTimeout(120);
 
   await lb.screenshot({ path: path.join(OUT, "lightbox-desktop.png") });
   assert(lbErrors.length === 0, "查看器验证台无脚本错误", lbErrors.slice(0, 2).join(" | ") || "无");

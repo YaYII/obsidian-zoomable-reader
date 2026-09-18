@@ -372,6 +372,8 @@ export interface ZoomAffordanceOptions {
   images: boolean;
   diagrams: boolean;
   onTarget: (target: LightboxTarget) => void;
+  /** 按钮常驻显示（默认 true）。false = 只有指针悬停在图上才出现 */
+  persistent?: boolean;
   /** 桌面是否也用「点击图片」作为入口（默认 false：桌面只认悬停按钮） */
   clickToOpen?: boolean;
   /** 是否强制启用悬停按钮（验证台用；真实环境由 matchMedia 判定） */
@@ -385,6 +387,8 @@ interface AffordanceHit {
   /** 用来定位按钮的盒子：图片就是图片本身，图表就是它的容器 */
   box: Element;
 }
+
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** 太小的 svg 多半是图标（callout 图标、按钮图标、行内符号），不该接管。 */
 const MIN_DIAGRAM_WIDTH = 96;
@@ -405,7 +409,13 @@ function findAffordanceHit(el: Element, opts: { images: boolean; diagrams: boole
      * 定位用的盒子优先取图表的容器（按钮落在容器右上角更整齐）。 */
     const svg = el.closest("svg");
     if (svg && isZoomableSvg(svg)) {
-      const box = svg.closest(".mermaid, figure, .block-language-chart, .excalidraw-svg") || svg;
+      /* 按钮必须挂在【HTML 元素】上：挂在 <svg> 里会被当成 SVG 内容而不渲染
+       * （实测：按钮尺寸 0x0，点了没反应）。优先用图表容器，退回父元素，
+       * 若父元素仍在 SVG 命名空间里就继续往上爬。 */
+      let box: Element = svg.closest(".mermaid, figure, .block-language-chart, .excalidraw-svg") ||
+        svg.parentElement ||
+        svg;
+      while (box.namespaceURI === SVG_NS && box.parentElement) box = box.parentElement;
       return { target: { kind: "diagram", element: svg }, box: box };
     }
   }
@@ -440,6 +450,9 @@ function buildZoomIcon(doc: Document): SVGElement {
 }
 
 export function installZoomAffordance(doc: Document, opts: ZoomAffordanceOptions): () => void {
+  /* 常驻模式是默认：按钮跟着内容走，不用悬停去找 */
+  if (opts.persistent !== false) return bindPersistent(doc, opts);
+
   const win = doc.defaultView;
   const hoverCapable = opts.forceHover === true
     ? true
@@ -538,6 +551,122 @@ export function installZoomAffordance(doc: Document, opts: ZoomAffordanceOptions
     button.removeEventListener("click", onButtonClick);
     if (win) win.removeEventListener("resize", hide);
     if (button.parentNode) button.parentNode.removeChild(button);
+  };
+  return teardown;
+}
+/* ============================================================================
+ * 常驻模式：每张图片 / 每个图表自己带一个右上角按钮
+ * ---------------------------------------------------------------------------
+ * 为什么改成常驻：悬停模式要求鼠标停在图上按钮才出现，指针一离开就消失 ——
+ * 想点的时候正好没有。常驻按钮跟着内容走，滚动、缩放、重排都不会错位。
+ *
+ * 实现方式：把目标包一层 .zr-zoom-host（position: relative），按钮绝对定位在
+ * 它的右上角。这样不需要任何滚动/尺寸监听，天然跟随内容。
+ * 代价是会改动笔记的 DOM，所以做了三件事保证可逆与幂等：
+ *   ① 每个目标只包一次（data-zr-zoom-bound 标记）；
+ *   ② 插件卸载时逐个还原（把目标放回原来的父节点，删掉包装与按钮）；
+ *   ③ 用一个 150ms 防抖的 MutationObserver 增量补齐（阅读视图重渲染后自动重挂）。
+ * ========================================================================== */
+
+const HOST_CLASS = "zr-zoom-host";
+const BOUND_ATTR = "data-zr-zoom-bound";
+
+interface BoundTarget {
+  host: HTMLElement;
+  target: Element;
+  button: HTMLButtonElement;
+  /** 是否为目标包了一层（图片会，svg 不会） */
+  wrapped: boolean;
+}
+
+function bindPersistent(doc: Document, opts: ZoomAffordanceOptions): () => void {
+  const bound: BoundTarget[] = [];
+  let timer: number | null = null;
+  const win = doc.defaultView;
+
+  const addButton = (target: Element, hit: AffordanceHit) => {
+    const isSvg = target.tagName.toLowerCase() === "svg";
+    let host: HTMLElement;
+    let wrapped = false;
+    if (isSvg) {
+      /* svg 不包装：把它套进 inline-block 的包装后，width:auto / width:100% 的 svg
+       * 会塌成 0 宽（尺寸依赖包装、包装依赖内容，循环）—— 实测踩到过。
+       * 直接用它的容器（.mermaid / figure / block-language-* / 父元素）当定位上下文，
+       * 只加一个 position: relative，不改变任何布局。 */
+      host = hit.box as HTMLElement;
+      host.classList.add(HOST_CLASS);
+    } else {
+      const parent = target.parentNode;
+      if (!parent) return;
+      const span = doc.createElement("span");
+      /* 两个类：HOST_CLASS 只做定位上下文，-wrap 才 inline-block。
+       * 图表容器只加前者，否则容器变 inline-block 后，width:100% 的 svg 会塌成 0 宽。 */
+      span.className = HOST_CLASS + " " + HOST_CLASS + "-wrap";
+      parent.insertBefore(span, target);
+      span.appendChild(target);
+      host = span;
+      wrapped = true;
+    }
+
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.className = "zr-zoom-affordance zr-zoom-affordance-inline";
+    button.setAttribute("aria-label", opts.label || "Zoom in");
+    button.title = opts.label || "Zoom in";
+    button.appendChild(buildZoomIcon(doc));
+    button.addEventListener("click", (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      opts.onTarget({ kind: isSvg ? "diagram" : "image", element: target });
+    });
+    host.appendChild(button);
+    target.setAttribute(BOUND_ATTR, "1");
+    bound.push({ host: host, target: target, button: button, wrapped: wrapped });
+  };
+
+  const scan = () => {
+    const body = doc.body;
+    if (!body) return;
+    const candidates = body.querySelectorAll("svg, img");
+    for (const el of Array.from(candidates)) {
+      if (el.getAttribute(BOUND_ATTR) === "1") continue;
+      if (el.closest(".zr-lightbox, .zr-zoom-affordance")) continue;
+      const hit = findAffordanceHit(el, opts);
+      if (hit) addButton(el, hit);
+    }
+  };
+
+  const schedule = () => {
+    if (timer !== null) window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      timer = null;
+      scan();
+    }, 150);
+  };
+
+  const observer = new MutationObserver(schedule);
+  observer.observe(doc.body, { childList: true, subtree: true });
+  scan();
+
+  const teardown = () => {
+    observer.disconnect();
+    if (timer !== null) window.clearTimeout(timer);
+    for (const item of bound) {
+      /* 还原现场：包装过的放回原位并删掉包装；没包装的（svg）只摘掉类 */
+      if (item.wrapped) {
+        const parent = item.host.parentNode;
+        if (parent) {
+          parent.insertBefore(item.target, item.host);
+          parent.removeChild(item.host);
+        }
+      } else {
+        item.host.classList.remove(HOST_CLASS);
+      }
+      item.target.removeAttribute(BOUND_ATTR);
+      item.button.remove();
+    }
+    bound.length = 0;
+    void win;
   };
   return teardown;
 }

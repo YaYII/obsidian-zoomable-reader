@@ -57,6 +57,7 @@ export default class ZoomableReaderPlugin extends Plugin {
       images: this.settings.imageViewer,
       diagrams: this.settings.diagramViewer,
       clickToOpen: this.settings.clickToOpenViewer,
+      persistent: this.settings.persistentZoomButton,
       label: "Zoom in",
       onTarget: (found) => {
         const lightbox = this.openLightbox();

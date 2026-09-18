@@ -10,6 +10,8 @@
   .markdown-rendered { padding: 24px; max-width: 900px; }
   .markdown-rendered img { max-width: 320px; border: 1px solid #ccc; }
   .mermaid { width: 420px; }
+  /* 模拟 Obsidian 的 app.css：svg 不会超过版心宽度（否则常驻按钮会跑到屏幕外） */
+  #svg-variants svg { max-width: 100%; }
 </style>
 </head>
 <body>
@@ -73,12 +75,14 @@
   /* 与插件里同一条代码路径：悬停按钮 + 点击委派。
      forceHover=true 让无头浏览器也能走「桌面悬停」分支；
      setTouchMode() 换回真实触屏的判定（matchMedia('(hover: hover)') 为假 → 轻点即开）。 */
-  function installAffordance(forceHover) {
+  function installAffordance(mode) {
     if (window.lightboxHarnessDetach) window.lightboxHarnessDetach();
     window.lightboxHarnessDetach = window.installZoomAffordance(document, {
       images: true,
       diagrams: true,
-      forceHover: forceHover,
+      persistent: mode === "persistent",
+      forceHover: mode === "hover",
+      /* touch：既不常驻也不强制悬停 → 判定走 matchMedia，真实触屏即「轻点打开」 */
       clickToOpen: false,
       label: "Zoom in",
       onTarget: function (found) {
@@ -87,7 +91,8 @@
       }
     });
   }
-  installAffordance(true);
+  /* 默认走常驻模式（与插件默认一致） */
+  installAffordance("persistent");
   window.lightboxHarness = {
     lightbox: lightbox,
     isOpen: function () { return lightbox.isOpen; },
@@ -115,7 +120,11 @@
     diagramBackInPlace: function () {
       var svg = document.getElementById("diagram");
       var host = document.getElementById("diagram-host");
-      return !!(svg && host && svg.parentElement === host);
+      if (!svg || !host) return false;
+      if (svg.parentElement === host) return true;
+      /* 常驻模式下图片会被包进 .zr-zoom-host；svg 不会被包装（见 lightbox.ts 说明） */
+      var wrapper = svg.closest(".zr-zoom-host");
+      return !!wrapper && wrapper.parentElement === host;
     },
     affordance: function () { return document.querySelector(".zr-zoom-affordance"); },
     affordanceBox: function () {
@@ -139,8 +148,34 @@
         borderRadius: cs.borderTopLeftRadius,
       };
     },
-    setTouchMode: function () { installAffordance(false); },
-    setDesktopMode: function () { installAffordance(true); },
+    setPersistentMode: function () { installAffordance("persistent"); },
+    setHoverMode: function () { installAffordance("hover"); },
+    setTouchMode: function () { installAffordance("touch"); },
+    /** 常驻模式下：某个目标自己的按钮（在它的 .zr-zoom-host 包装里） */
+    affordanceFor: function (id) {
+      var target = document.getElementById(id);
+      if (!target) return null;
+      var host = target.closest(".zr-zoom-host");
+      return host ? host.querySelector(".zr-zoom-affordance") : null;
+    },
+    affordanceBoxFor: function (id) {
+      var btn = window.lightboxHarness.affordanceFor(id);
+      if (!btn || btn.hidden) return null;
+      var r = btn.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    },
+    affordanceVisibleFor: function (id) {
+      var btn = window.lightboxHarness.affordanceFor(id);
+      if (!btn) return false;
+      var cs = getComputedStyle(btn);
+      return !btn.hidden && cs.display !== "none" && cs.visibility !== "hidden";
+    },
+    hostWrapped: function (id) {
+      var target = document.getElementById(id);
+      return !!(target && target.closest(".zr-zoom-host"));
+    },
+    hostCount: function () { return document.querySelectorAll(".zr-zoom-host").length; },
+    setTouchMode2: function () { installAffordance("touch"); },
     openImage: function () { lightbox.openImage(document.getElementById("photo")); },
     openDiagram: function () { lightbox.openNode(document.getElementById("diagram"), { title: "Mermaid diagram" }); },
     clickToolbar: function (title) {

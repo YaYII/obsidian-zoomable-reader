@@ -58,6 +58,7 @@ Notes:
 | Show toolbar | on | Zoom buttons and the zoom label |
 | Page padding | 16px | Gap between the note and the edge of the view |
 | Click images to open a zoomable viewer | on | The top right corner button appears on images |
+| Always show the zoom button | on | Off: the button only appears on hover |
 | Open the viewer by clicking images too | off | On: a click on the image also opens the viewer |
 | Click diagrams to open a zoomable viewer | on | Same viewer for Mermaid diagrams |
 | Fit to window when the viewer opens | on | Off: images open at 100% |
@@ -65,9 +66,10 @@ Notes:
 
 ## Image viewer
 
-Hover an image (or a diagram) and a small button appears in its top right corner — click that to
-open it full screen. Clicking the image itself keeps its usual meaning; on touch devices, where
-there is no hover, a tap opens the viewer.
+Every image and diagram carries a small button in its top right corner — click that to open it
+full screen. The button is always there, so you never have to hunt for it (turn off *Always show
+the zoom button* if you prefer it to appear only on hover). Clicking the image itself keeps its
+usual meaning; on touch devices, where there is no hover, a tap opens the viewer.
 
 ![The image viewer, zoomed into a 1600 x 900 screenshot](docs/images/screenshot-viewer.png)
 

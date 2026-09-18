@@ -1,7 +1,7 @@
 {
   "id": "zoomable-reader",
   "name": "Zoomable Reader",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minAppVersion": "1.5.7",
   "description": "Read any note on a pan-and-zoom board. Pinch to zoom on mobile, Ctrl and wheel on desktop, drag to pan. Handy for wide diagrams, tables and screenshots.",
   "author": "YaYII",

@@ -19,8 +19,10 @@ export interface ZoomableReaderSettings {
   diagramViewer: boolean;
   /** 查看器打开时先适配窗口（关掉则先按 100%） */
   lightboxFitOnOpen: boolean;
-  /** 桌面上点击图片也直接打开查看器（默认关：桌面上用右上角的悬停按钮） */
+  /** 桌面上点击图片也直接打开查看器（默认关：桌面上用右上角的按钮） */
   clickToOpenViewer: boolean;
+  /** 右上角放大按钮常驻显示（默认开；关掉则只有悬停时出现） */
+  persistentZoomButton: boolean;
 }
 
 export { DEFAULT_SETTINGS };
@@ -115,6 +117,16 @@ export class ZoomableReaderSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.diagramViewer).onChange(async (value) => {
           this.plugin.settings.diagramViewer = value;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(container)
+      .setName("Always show the zoom button")
+      .setDesc("On: every image and diagram carries a small button in its top right corner, so you never have to hunt for it. Off: the button only appears while the pointer is over the image.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.persistentZoomButton).onChange(async (value) => {
+          this.plugin.settings.persistentZoomButton = value;
           await this.plugin.saveSettings();
         })
       );

@@ -243,3 +243,34 @@ body.is-mobile .zr-lightbox-label {
   min-width: 42px;
   height: 42px;
 }
+/* --- 常驻放大按钮：跟着图片/图表走 ---------------------------------------- */
+/* 只负责「成为定位上下文」，不改变任何布局（用在图表容器上） */
+.zr-zoom-host {
+  position: relative;
+}
+
+/* 图片的包装层：需要 inline-block 才能把按钮钉在图片的右上角。
+ * 注意不能把这一条套到图表容器上 —— 会让 width:100% 的 svg 塌成 0 宽（实测踩到）。 */
+.zr-zoom-host-wrap {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.zr-zoom-affordance-inline {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  /* 常驻但不抢眼：默认半透明，指到才变实心 */
+  opacity: 0.42;
+}
+
+.zr-zoom-host:hover .zr-zoom-affordance-inline {
+  opacity: 1;
+}
+
+/* 触屏没有悬停，轻点即可打开查看器，不需要常驻按钮占地方 */
+@media (hover: none) {
+  .zr-zoom-affordance-inline {
+    display: none;
+  }
+}

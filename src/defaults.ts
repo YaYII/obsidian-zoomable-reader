@@ -13,4 +13,6 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   diagramViewer: true,
   lightboxFitOnOpen: true,
   clickToOpenViewer: false,
+  /* 常驻显示右上角放大按钮（默认）。关掉则只有指针悬停时才出现。 */
+  persistentZoomButton: true,
 };

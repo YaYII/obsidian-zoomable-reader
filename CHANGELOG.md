@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.1
+
+- **The zoom button is always visible now** (default), instead of appearing only while the pointer
+  is over an image. Hunting for a button that disappears the moment you move towards it was the
+  wrong interaction. It sits in the top right corner of every image and diagram, at 42% opacity so
+  it does not shout, and goes fully opaque when you point at it. The old hover behaviour is still
+  available: turn off *Always show the zoom button* in the settings. On touch devices the button is
+  hidden entirely, because a tap already opens the viewer.
+
+Panels are wrapped rather than repositioned: each image gets a small wrapper that carries the
+button, so it scrolls and reflows with the image — no scroll or resize listeners, nothing to get
+out of sync. The wrapper is removed when the plugin unloads.
+
+Three things the harness caught while building this, all of them invisible in code review:
+
+- Wrapping an SVG in an `inline-block` wrapper collapses a `width="100%"` SVG to zero width,
+  because its size then depends on the wrapper and the wrapper on its content. Diagrams are
+  therefore hosted by their existing container (only `position: relative` is added), and only
+  images get wrapped.
+- Applying the wrapper class to a chart container has the same effect, so the two concerns are now
+  two classes: `.zr-zoom-host` (positioning only) and `.zr-zoom-host-wrap` (the image wrapper).
+- A button appended *inside* an `<svg>` is not rendered at all — its box is 0 by 0 and clicks do
+  nothing. The host is now always an HTML element, climbing out of the SVG namespace if needed.
+
+Verification: **68 assertions**, all driven by real events — the button is visible without hovering,
+measured inside the image's top right corner, clicking it opens the viewer, clicking the image does
+not, the viewer content computes to no background, border or shadow, three common SVG shapes each
+open and zoom to 35x, and switching the setting back to hover mode restores the old behaviour.
+
 ## 1.2.0
 
 - **The zoom entry point is now a small button in the top right corner of an image** (and of a
