@@ -245,6 +245,13 @@ try {
   }));
   const first = await lbState();
   assert(opened.open && opened.overlays === 1, "点右上角按钮 → 打开查看器（且只有一个浮层）", "overlays=" + opened.overlays);
+  const backgrounds = await lb.evaluate(() => ({
+    matches: window.lightboxHarness.backgroundMatchesNote(),
+    canvas: window.lightboxHarness.canvasTransparent(),
+  }));
+  assert(backgrounds.matches, "查看器底色等于主题的 --background-primary（与笔记一致，不透明元素不会露馅）", "matches=" + backgrounds.matches);
+  assert(backgrounds.canvas, "查看器画布本身透明（只有视口有底色）", "canvasTransparent=" + backgrounds.canvas);
+
   const contentStyle = await lb.evaluate(() => window.lightboxHarness.contentStyle());
   assert(contentStyle && contentStyle.background === "rgba(0, 0, 0, 0)" && contentStyle.borderWidth === "0px" && contentStyle.boxShadow === "none",
     "放大后的内容不加背景/边框/阴影（原本什么样就什么样）",

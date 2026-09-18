@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.2
+
+- **The viewer shares the note's background colour** (`--background-primary`). Some parts of a
+  diagram are opaque by design — an edge label carries a backing rectangle so the connector line
+  does not cut through its text — and on a differently coloured surface those rectangles read as
+  bright patches. With the same background, a diagram in the viewer looks exactly like the diagram
+  in the note, only bigger.
+- The canvas layer itself stays transparent; only the viewport carries the colour.
+- Verified with two new assertions (70 in total, all real events): the viewport's computed
+  background equals `--background-primary`, and the canvas computes to `rgba(0, 0, 0, 0)`.
+
+Companion change in the theme (1.2.3): diagram nodes are now drawn as coloured outlines with a
+transparent interior, so a box has colour where it should (the stroke) and no fill inside.
+
 ## 1.2.1
 
 - **The zoom button is always visible now** (default), instead of appearing only while the pointer

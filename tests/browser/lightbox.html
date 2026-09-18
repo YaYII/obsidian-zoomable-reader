@@ -137,6 +137,23 @@
       var el = document.querySelector(".zr-zoom-affordance");
       return !!(el && !el.hidden);
     },
+    /* 查看器底色必须等于主题的 --background-primary（笔记底色）：
+     * 图里有不透明元素（边标签底矩形），底色不一致时它们会变成一块块亮斑。 */
+    backgroundMatchesNote: function () {
+      var probe = document.createElement("div");
+      probe.style.background = "var(--background-primary)";
+      document.body.appendChild(probe);
+      var want = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      var viewport = document.querySelector(".zr-lightbox-viewport");
+      return !!viewport && getComputedStyle(viewport).backgroundColor === want;
+    },
+    canvasTransparent: function () {
+      var canvas = document.querySelector(".zr-lightbox-canvas");
+      if (!canvas) return false;
+      var bg = getComputedStyle(canvas).backgroundColor;
+      return bg === "rgba(0, 0, 0, 0)" || bg === "transparent";
+    },
     contentStyle: function () {
       var el = document.querySelector(".zr-lightbox-image, .zr-lightbox-node svg");
       if (!el) return null;

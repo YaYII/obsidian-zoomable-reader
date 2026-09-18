@@ -173,7 +173,9 @@ body.is-mobile .zr-label {
   position: relative;
   flex: 1 1 auto;
   overflow: hidden;
-  background-color: var(--background-secondary);
+  /* 底色必须与笔记正文一致（--background-primary）：图里有些元素是【不透明】的，
+   * 例如边标签底矩形（它要遮住从下方穿过的连线）。底色不一致时它们会变成一块块亮斑。 */
+  background-color: var(--background-primary);
   cursor: grab;
 }
 
