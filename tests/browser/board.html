@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Zoomable Reader · 白板模式验证台</title>
+<style>
+  /* 与 styles.css 的白板部分保持一致（验证台不依赖打包后的插件样式），
+     颜色用固定值：验证的是【几何与手势】，不是主题。 */
+  html, body { margin: 0; height: 100%; font-family: system-ui, "Noto Sans CJK SC", sans-serif; }
+  .zr-root { display: flex; flex-direction: column; height: 100%; }
+  .zr-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #ddd; background: #f4f4f4; font-size: 13px; }
+  .zr-label { min-width: 60px; font-variant-numeric: tabular-nums; }
+  .zr-viewport { position: relative; flex: 1 1 auto; overflow: hidden; background: #eceff1; cursor: grab; touch-action: none; overscroll-behavior: contain; }
+  .zr-canvas { position: absolute; top: 0; left: 0; width: max-content; transform-origin: 0 0; will-change: transform; }
+  /* 模式类：与 styles.css 一字不差 —— 真机 bug「白板一片空白」就出在这两条上 */
+  .zr-board-host { position: relative; }
+  .zr-mode-page .zr-board-host { display: none; }
+  .zr-mode-board .zr-page { display: none; }
+  .zr-page { width: 700px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
+  .zr-board { position: relative; }
+  .zr-board-links { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+  .zr-link { fill: none; stroke: #c8ccd2; stroke-width: 2; }
+  .zr-card { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .zr-card-depth-0 { border-width: 2px; border-color: #7159a3; }
+  .zr-card:not(.zr-card-depth-0) { border-left: 3px solid #7159a3; }
+  .zr-card-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #eee; background: #f7f7f9; cursor: pointer; }
+  .zr-card-title { flex: 1 1 auto; font-weight: 600; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+  .zr-card-focus { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 4px; background: transparent; color: #666; cursor: pointer; }
+  .zr-card-meta { padding: 6px 10px 0; color: #999; font-size: 12px; }
+  .zr-card-body { flex: 1 1 auto; padding: 10px 12px; overflow-wrap: anywhere; font-size: 14px; line-height: 1.65; color: #333; }
+  .zr-card-body p { margin: 0 0 8px; }
+  .zr-card-body p:last-child { margin-bottom: 0; }
+  .zr-card-body img { display: block; width: 100%; height: auto; }
+  .zr-card-body pre { margin: 0; padding: 8px 10px; background: #f5f5f7; border-radius: 6px; font-size: 12px; overflow: hidden; }
+  .zr-card-body table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .zr-card-body td, .zr-card-body th { border: 1px solid #e2e2e6; padding: 3px 6px; }
+  .zr-card-body blockquote { margin: 0; padding: 6px 10px; background: #f0f0ff; border-left: 3px solid #7159a3; }
+  .zr-viewport.zr-animating .zr-canvas { transition: transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+</style>
+</head>
+<body>
+<div class="zr-root" id="root">
+  <div class="zr-toolbar"><span class="zr-label" id="label">100%</span><span id="commits">0</span><span id="note"></span></div>
+  <div class="zr-viewport" id="viewport">
+    <div class="zr-canvas" id="canvas">
+      <!-- 与插件的视图同构：版面一层、白板一层，靠根节点上的模式类决定谁可见 -->
+      <div class="markdown-preview-view markdown-rendered zr-page" id="page"><p>版面模式（白板模式下这一层被隐藏）</p></div>
+      <div class="zr-board-host" id="host"></div>
+    </div>
+  </div>
+</div>
+<script src="out/zoom-pan.js"></script>
+<script>
+/* ============================================================================
+ * 白板验证台：用真实 DOM 渲染一块真白板，再用真实事件驱动它。
+ * 这里【刻意复制】插件视图的装配顺序（建层 → 渲染 → 定变换 → 绑点击），
+ * 因为要验证的正是这套装配在真浏览器里的结果。
+ * ========================================================================== */
+
+/* 一篇有代表性的中文笔记：标题跳级、围栏里的 #、表格、标注、长正文、图片，都在里面。 */
+var SAMPLE = [
+  "---",
+  "tags: [验证, 白板]",
+  "---",
+  "# 白板模式验证",
+  "",
+  "这一页用来验证「Markdown 被编译成白板」：标题成卡、正文成块、大纲成连线。",
+  "",
+  "## 为什么要白板",
+  "",
+  "手机上阅读视图不能双指缩放，宽表格与长图只能干瞪眼；白板把结构摊开，捏合放大读细节。",
+  "",
+  "- 表格要能一眼看全",
+  "- 长图要能放大看细节",
+  "- 结构要能一眼看出层级",
+  "",
+  "### 设计取舍",
+  "",
+  "用整齐树排版：父卡对着它的子卡带垂直居中，连线水平收口。",
+  "",
+  "## 手势清单",
+  "",
+  "| 手势 | 效果 |",
+  "| --- | --- |",
+  "| 单指拖动 | 平移全图 |",
+  "| 双指捏合 | 缩放 |",
+  "| 双击 | 100% 与 200% 之间切换 |",
+  "",
+  "## 提示与代码",
+  "",
+  "> [!note] 提示",
+  "> 点卡片标题可以把这张卡放到眼前。",
+  "",
+  "\x60\x60\x60bash",
+  "# 这一行是注释，不是标题",
+  "npm run verify:board",
+  "\x60\x60\x60",
+  "",
+  "## 长正文与小节",
+  "",
+  "中文笔记常写到四五级标题，逐级成列会把白板拉得很宽，所以超过设置层级的小节会被折进上一张卡。" +
+  "这一段刻意写长，用来验证「先估算高度、渲染完再按真实高度重排」这条两遍排版的路子是否成立：" +
+  "如果第二遍没跑，卡片会互相压住，或者白板底部留出一大块空白。",
+  "",
+  "### 折叠进来的小节",
+  "",
+  "折进来之后依然要有小标题，读起来才知道自己在哪一层。",
+].join("\n");
+
+var rootEl = document.getElementById("root");
+var viewport = document.getElementById("viewport");
+var canvas = document.getElementById("canvas");
+var host = document.getElementById("host");
+var label = document.getElementById("label");
+
+var settings = {
+  cardWidth: 300,
+  gap: 32,
+  padding: 40,
+  connectors: true,
+  maxDepth: 3,
+  maxCards: 120,
+  pinch: true,
+  doubleTapZoom: 2,
+};
+
+var model = null;
+var board = null;
+var layer = null;
+var commits = 0;
+
+function meta(doc, depth) {
+  return doc.nodes.length + " 张卡片 · H" + depth + " / " + doc.nodes.length + " cards";
+}
+
+/* 正文渲染：插件里交给 Obsidian 的 MarkdownRenderer，验证台里按块类型做简化 DOM。
+ * 图片给真图（data URI），因为「图片撑高卡片」正是两遍排版要处理的情况之一。 */
+function renderBody(bodyEl, node) {
+  var blocks = node.blocks.length ? node.blocks : [];
+  for (var i = 0; i < blocks.length; i++) {
+    var block = blocks[i];
+    if (block.kind === "image") {
+      var img = document.createElement("img");
+      img.src = "data:image/svg+xml;utf8," + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="600" height="200" fill="#dfe6ee"/><text x="20" y="110" font-size="28" fill="#556">验证用图片 600x200</text></svg>'
+      );
+      img.alt = block.preview;
+      bodyEl.appendChild(img);
+      continue;
+    }
+    if (block.kind === "code" || block.kind === "mermaid") {
+      var pre = document.createElement("pre");
+      pre.textContent = block.markdown.replace(/^\x60{3}[^\n]*\n?/, "").replace(/\x60{3}$/, "");
+      bodyEl.appendChild(pre);
+      continue;
+    }
+    if (block.kind === "table") {
+      var rows = block.markdown.trim().split("\n");
+      var table = document.createElement("table");
+      for (var r = 0; r < rows.length; r++) {
+        if (/^\|?[\s:|-]+\|?$/.test(rows[r]) && rows[r].indexOf("-") >= 0) continue;
+        var cells = rows[r].replace(/^\||\|$/g, "").split("|");
+        var tr = document.createElement("tr");
+        for (var c = 0; c < cells.length; c++) {
+          var td = document.createElement(r === 0 ? "th" : "td");
+          td.textContent = cells[c].trim();
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+      }
+      bodyEl.appendChild(table);
+      continue;
+    }
+    if (block.kind === "callout" || block.kind === "quote") {
+      var quote = document.createElement("blockquote");
+      quote.textContent = block.preview;
+      bodyEl.appendChild(quote);
+      continue;
+    }
+    var p = document.createElement("p");
+    p.textContent = block.preview || block.markdown;
+    bodyEl.appendChild(p);
+  }
+}
+
+function buildLayer() {
+  if (layer) layer.destroy();
+  layer = new window.ZoomPanLayer(viewport, canvas, {
+    minScale: window.ZoomPanFormat.boardMinScale,
+    maxScale: 8,
+    doubleTapZoom: settings.doubleTapZoom,
+    pinch: settings.pinch,
+    onCommit: function (t) {
+      commits += 1;
+      document.getElementById("commits").textContent = String(commits);
+      label.textContent = window.ZoomPanFormat.percent(t.scale);
+    },
+  });
+}
+
+async function rerender() {
+  var parsed = window.BoardModel.parse(SAMPLE, { title: "白板验证.md" });
+  var fitted = window.BoardModel.foldToFit(parsed, settings.maxDepth, settings.maxCards);
+  model = fitted;
+  var gap = settings.gap;
+  board = await window.BoardRender.render(fitted.doc, host, {
+    cardWidth: settings.cardWidth,
+    gapX: Math.round(gap * 2.5),
+    gapY: gap,
+    padding: settings.padding,
+    connectors: settings.connectors,
+    meta: meta(fitted.doc, fitted.depth),
+    focusLabel: "放大到这张卡 / zoom to this card",
+    renderBody: renderBody,
+  });
+  document.getElementById("note").textContent =
+    fitted.doc.nodes.length + " cards · H" + fitted.depth + " · board " + board.layout.width + "x" + board.layout.height;
+}
+
+function focusCard(id, animate) {
+  var rect = board && board.layout.byId[id];
+  if (!rect) return false;
+  if (animate !== false) {
+    viewport.classList.add("zr-animating");
+    setTimeout(function () { viewport.classList.remove("zr-animating"); }, 260);
+  }
+  layer.focusRect(rect, 32);
+  return true;
+}
+
+/* 与插件视图同一条点击路径：抽出来的判定函数 + 聚焦。 */
+document.getElementById("host").addEventListener("click", function (event) {
+  var id = window.BoardRender.cardIdFromClick(event.target);
+  if (id) focusCard(id);
+});
+viewport.addEventListener("pointerdown", function () { viewport.classList.remove("zr-animating"); }, true);
+
+/* 与插件 renderFile() 同序：先对齐模式类，再渲染。
+ * 漏掉第一步就是 1.3.0 的真机 bug：白板被渲染进 display:none 的那一层。 */
+async function renderFileMode(mode) {
+  settings.mode = mode;
+  window.BoardRender.applyModeClasses(rootEl, settings.mode);
+  await rerender();
+}
+
+/* 复现用：故意不对齐模式类（模拟「onOpen 设了版面类，setState 改成白板却没再改类」） */
+async function renderWithoutModeClasses(mode) {
+  settings.mode = mode;
+  await rerender();
+}
+
+/* 真正可见的卡片数：display:none 的祖先会让 getBoundingClientRect 全为 0 */
+function visibleCards() {
+  var out = 0;
+  var nodes = host.querySelectorAll("[" + window.BoardRender.classes.cardAttr + "]");
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].getBoundingClientRect().width > 0) out += 1;
+  }
+  return out;
+}
+
+(async function start() {
+  settings.mode = "board";
+  window.BoardRender.applyModeClasses(rootEl, settings.mode);
+  await rerender();
+  buildLayer();
+  focusCard(model.doc.rootId, false);
+
+  var vrect = function () { var r = viewport.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; };
+
+  window.harness = {
+    get commits() { return commits; },
+    state: function () { return layer.transform; },
+    rect: vrect,
+    board: function () { return { width: board.layout.width, height: board.layout.height }; },
+    cardIds: function () { return board.layout.cards.map(function (c) { return c.id; }); },
+    modelCards: function () { return model.doc.nodes.map(function (n) { return { id: n.id, depth: n.depth, title: n.title, children: n.children.slice() }; }); },
+    layout: function () { return board.layout.cards.map(function (c) { return { id: c.id, x: c.x, y: c.y, width: c.width, height: c.height, depth: c.depth }; }); },
+    links: function () { return board.layout.links.map(function (l) { return { from: l.from, to: l.to, x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 }; }); },
+    domCards: function () {
+      var out = [];
+      var v = vrect();
+      var nodes = host.querySelectorAll("[" + window.BoardRender.classes.cardAttr + "]");
+      for (var i = 0; i < nodes.length; i++) {
+        var r = nodes[i].getBoundingClientRect();
+        out.push({
+          id: nodes[i].getAttribute(window.BoardRender.classes.cardAttr),
+          left: r.left - v.left,
+          top: r.top - v.top,
+          width: r.width,
+          height: r.height,
+        });
+      }
+      return out;
+    },
+    contentPoint: function (px, py) { var t = layer.transform; return { x: (px - t.x) / t.scale, y: (py - t.y) / t.scale }; },
+    focusCard: focusCard,
+    fitBoard: function () { layer.focusRect({ x: 0, y: 0, width: board.layout.width, height: board.layout.height }, 16); },
+    reset: function (padding) { layer.reset(padding === undefined ? 16 : padding); },
+    setPinch: function (on) { settings.pinch = !!on; buildLayer(); },
+    setModeClasses: function (mode) { window.BoardRender.applyModeClasses(rootEl, mode); },
+    modeClasses: function () { return rootEl.className; },
+    renderFileMode: renderFileMode,
+    renderWithoutModeClasses: renderWithoutModeClasses,
+    visibleCards: visibleCards,
+    setCardWidth: async function (w) { settings.cardWidth = w; var t = layer.transform; await rerender(); layer.setTransform(t, false); },
+    rerender: rerender,
+    snapshot: function () {
+      return {
+        scale: layer.transform.scale,
+        cards: board.layout.cards.length,
+        links: board.layout.links.length,
+        width: board.layout.width,
+        height: board.layout.height,
+        commits: commits,
+      };
+    },
+  };
+})();
+</script>
+</body>
+</html>

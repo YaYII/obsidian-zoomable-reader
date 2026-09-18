@@ -59,7 +59,17 @@ describe("仓库文件与披露", () => {
   });
 
   it("源码里没有网络请求与遥测（审核政策硬性要求）", () => {
-    const files = ["main.ts", "src/view.ts", "src/zoom-pan.ts", "src/settings.ts", "src/defaults.ts"];
+    const files = [
+      "main.ts",
+      "src/view.ts",
+      "src/zoom-pan.ts",
+      "src/settings.ts",
+      "src/settings-spec.ts",
+      "src/defaults.ts",
+      "src/board-model.ts",
+      "src/board-layout.ts",
+      "src/board-render.ts",
+    ];
     for (const file of files) {
       const source = fs.readFileSync(path.join(ROOT, file), "utf8");
       for (const forbidden of ["fetch(", "XMLHttpRequest", "navigator.sendBeacon", "require(\"http\")", "requestUrl"]) {

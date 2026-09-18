@@ -75,6 +75,10 @@
   /* 与插件里同一条代码路径：悬停按钮 + 点击委派。
      forceHover=true 让无头浏览器也能走「桌面悬停」分支；
      setTouchMode() 换回真实触屏的判定（matchMedia('(hover: hover)') 为假 → 轻点即开）。 */
+  /* corner：与插件设置里的「放大按钮的位置」同一参数。
+     默认左上 —— 右上角是 Obsidian 自己的「编辑源文件 / 更多选项」入口，
+     按钮贴在那里会把它盖住（用户实测反馈）。 */
+  var currentCorner = "top-left";
   function installAffordance(mode) {
     if (window.lightboxHarnessDetach) window.lightboxHarnessDetach();
     window.lightboxHarnessDetach = window.installZoomAffordance(document, {
@@ -84,6 +88,7 @@
       forceHover: mode === "hover",
       /* touch：既不常驻也不强制悬停 → 判定走 matchMedia，真实触屏即「轻点打开」 */
       clickToOpen: false,
+      corner: currentCorner,
       label: "Zoom in",
       onTarget: function (found) {
         if (found.kind === "image") lightbox.openImage(found.element);
@@ -166,6 +171,22 @@
       };
     },
     setPersistentMode: function () { installAffordance("persistent"); },
+    setCorner: function (corner) { currentCorner = corner; installAffordance("persistent"); },
+    corner: function () { return currentCorner; },
+    /** 按钮当前的类名（is-left / is-right）：验证「角」真的是可配的 */
+    affordanceClassFor: function (id) {
+      var btn = window.lightboxHarness.affordanceFor(id);
+      return btn ? btn.className : null;
+    },
+    /** 右上角 26x26 的「编辑入口区」是否被按钮盖住：这是用户报的那个问题 */
+    coversTopRightCorner: function (id) {
+      var photo = document.getElementById(id);
+      var box = window.lightboxHarness.affordanceBoxFor(id);
+      if (!photo || !box) return false;
+      var r = photo.getBoundingClientRect();
+      var zone = { left: r.right - 32, right: r.right, top: r.top, bottom: r.top + 32 };
+      return box.left < zone.right && zone.left < box.right && box.top < zone.bottom && zone.top < box.bottom;
+    },
     setHoverMode: function () { installAffordance("hover"); },
     setTouchMode: function () { installAffordance("touch"); },
     /** 常驻模式下：某个目标自己的按钮（在它的 .zr-zoom-host 包装里） */

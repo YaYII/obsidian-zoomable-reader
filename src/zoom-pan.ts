@@ -25,6 +25,12 @@ export const MIN_SCALE = 0.2;
 export const MAX_SCALE = 8;
 export const ZOOM_STEP = 1.25;
 
+/** 白板模式的缩放下限更低：一张几百张卡片的白板要能一眼看全（「回到全图」）。 */
+export const BOARD_MIN_SCALE = 0.05;
+
+/** 双指捏合灵敏度：1 = 手指距离翻倍即放大一倍（默认）。 */
+export const PINCH_SENSITIVITY_DEFAULT = 1;
+
 /** 拖动判定阈值（px）：小于它算“点击”，大于它才算“平移”，否则链接点不动 */
 export const DRAG_THRESHOLD = 5;
 
@@ -74,6 +80,29 @@ export function fitScale(
   return clampScale(viewport / content, min, max);
 }
 
+/**
+ * 把内容坐标系里的一块矩形（白板上的一张卡片 / 整块白板）放进视口：
+ * 缩放取「宽高都能装下」的较小值，然后居中。用于「聚焦卡片」与「回到全图」。
+ *
+ * 注意 rect 必须用【内容坐标】（未变换时的坐标），这样在任意当前缩放下都能算出正确目标。
+ */
+export function fitRect(
+  viewport: { width: number; height: number },
+  rect: { x: number; y: number; width: number; height: number },
+  padding: number = 24,
+  min: number = MIN_SCALE,
+  max: number = MAX_SCALE
+): Transform {
+  const vw = Math.max(1, viewport.width - padding * 2);
+  const vh = Math.max(1, viewport.height - padding * 2);
+  const scale = clampScale(Math.min(fitScale(vw, rect.width, min, max), fitScale(vh, rect.height, min, max)), min, max);
+  return {
+    scale: scale,
+    x: padding + (vw - rect.width * scale) / 2 - rect.x * scale,
+    y: padding + (vh - rect.height * scale) / 2 - rect.y * scale,
+  };
+}
+
 export function distance(a: Point, b: Point): number {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
@@ -108,6 +137,10 @@ export interface ZoomPanOptions {
   maxScale?: number;
   /** 双击放大到的倍数（再双击回到 100%） */
   doubleTapZoom?: number;
+  /** 双指捏合是否可用（默认 true）。关掉后双指只跟随中点平移，不改缩放。 */
+  pinch?: boolean;
+  /** 双指灵敏度：1 = 手指距离翻倍即放大一倍（默认） */
+  pinchSensitivity?: number;
   /** 状态每次变化都回调（调用方自行节流，用于持久化） */
   onCommit?: (t: Transform) => void;
 }
@@ -116,6 +149,8 @@ interface ResolvedOptions {
   minScale: number;
   maxScale: number;
   doubleTapZoom: number;
+  pinch: boolean;
+  pinchSensitivity: number;
   onCommit: ((t: Transform) => void) | null;
 }
 
@@ -146,6 +181,9 @@ export class ZoomPanLayer {
       minScale: options.minScale === undefined ? MIN_SCALE : options.minScale,
       maxScale: options.maxScale === undefined ? MAX_SCALE : options.maxScale,
       doubleTapZoom: options.doubleTapZoom === undefined ? 2 : options.doubleTapZoom,
+      pinch: options.pinch === undefined ? true : options.pinch,
+      pinchSensitivity:
+        options.pinchSensitivity === undefined ? PINCH_SENSITIVITY_DEFAULT : clamp(options.pinchSensitivity, 0.25, 3),
       onCommit: options.onCommit === undefined ? null : options.onCommit,
     };
 
@@ -224,6 +262,21 @@ export class ZoomPanLayer {
     this.setTransform({ scale: scale, x: padding, y: padding });
   }
 
+  /**
+   * 聚焦一块内容矩形（白板上的卡片、或整块白板）：把它居中铺满视口。
+   * rect 用内容坐标；padding 是四周留白。
+   */
+  focusRect(rect: { x: number; y: number; width: number; height: number }, padding: number = 24): void {
+    const t = fitRect(
+      { width: this.viewport.clientWidth, height: this.viewport.clientHeight },
+      rect,
+      padding,
+      this.opts.minScale,
+      this.opts.maxScale
+    );
+    this.setTransform(t);
+  }
+
   /** 复位：100% + 左上角内边距 */
   reset(padding: number = 16): void {
     this.setTransform({ scale: 1, x: padding, y: padding });
@@ -288,8 +341,12 @@ export class ZoomPanLayer {
       const rect = this.viewport.getBoundingClientRect();
       /* 双指：以两指中点为锚点缩放，同时跟随中点平移 —— 一个手势里同时做到
        * “放大”和“挪动”，这是捏合手感自然的关键。 */
-      if (this.pinchDistance > 0 && dist > 0) {
-        this.t = zoomAt(this.t, dist / this.pinchDistance, mid.x - rect.left, mid.y - rect.top, this.opts.minScale, this.opts.maxScale);
+      if (this.opts.pinch && this.pinchDistance > 0 && dist > 0) {
+        /* 灵敏度指数：1 = 手指距离翻倍即放大一倍；>1 更灵敏，<1 更细腻。
+         * 用幂而不是乘法，是为了「反过来捏回去」能精确回到原缩放（可逆）。 */
+        const ratio = dist / this.pinchDistance;
+        const factor = this.opts.pinchSensitivity === 1 ? ratio : Math.pow(ratio, this.opts.pinchSensitivity);
+        this.t = zoomAt(this.t, factor, mid.x - rect.left, mid.y - rect.top, this.opts.minScale, this.opts.maxScale);
       }
       this.t = panBy(this.t, mid.x - this.pinchMid.x, mid.y - this.pinchMid.y);
       this.pinchDistance = dist;

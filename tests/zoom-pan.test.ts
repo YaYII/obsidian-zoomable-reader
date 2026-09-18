@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  BOARD_MIN_SCALE,
   DRAG_THRESHOLD,
   MAX_SCALE,
   MIN_SCALE,
   clampScale,
   distance,
   fitScale,
+  fitRect,
   formatPercent,
   identity,
   midpoint,
@@ -134,5 +136,34 @@ describe("常量契约", () => {
   it("缩放范围合理（能缩小到 20%，能放大到 8 倍）", () => {
     expect(MIN_SCALE).toBeLessThan(1);
     expect(MAX_SCALE).toBeGreaterThanOrEqual(4);
+  });
+});
+describe("fitRect：把一块矩形放进视口（聚焦卡片 / 回到全图）", () => {
+  it("宽高都装得下时取较小的比例，并居中", () => {
+    const t = fitRect({ width: 800, height: 600 }, { x: 0, y: 0, width: 400, height: 200 }, 0);
+    expect(t.scale).toBe(2);
+    expect(t.x).toBe(0);
+    expect(t.y).toBe(100);
+  });
+
+  it("内容偏移时把偏移算进去（卡片不在原点也要居中）", () => {
+    const t = fitRect({ width: 400, height: 400 }, { x: 1000, y: 500, width: 200, height: 200 }, 0);
+    expect(t.scale).toBe(2);
+    expect(t.x).toBeCloseTo(-2000, 6);
+    expect(t.y).toBeCloseTo(-1000, 6);
+  });
+
+  it("超大白板被下限截断，但不会产生 NaN（「回到全图」在手机上必须安全）", () => {
+    const t = fitRect({ width: 400, height: 800 }, { x: 0, y: 0, width: 20000, height: 30000 }, 16, BOARD_MIN_SCALE, MAX_SCALE);
+    expect(t.scale).toBe(BOARD_MIN_SCALE);
+    expect(Number.isFinite(t.x)).toBe(true);
+    expect(Number.isFinite(t.y)).toBe(true);
+  });
+
+  it("零尺寸矩形退化为 100%（fitScale 的安全值），不产生 NaN 变换", () => {
+    const t = fitRect({ width: 800, height: 600 }, { x: 0, y: 0, width: 0, height: 0 }, 16);
+    expect(t.scale).toBe(1);
+    expect(Number.isFinite(t.x)).toBe(true);
+    expect(Number.isFinite(t.y)).toBe(true);
   });
 });

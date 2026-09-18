@@ -1,5 +1,86 @@
 # Changelog
 
+## 1.3.1
+
+- **Fixed: opening a note as a whiteboard showed an empty view.** Obsidian's view lifecycle is
+  `onOpen()` and then `setState()`. `onOpen()` reads the configured default mode (page) and
+  paints the mode classes on the root element; `setState()` then switches the mode to whiteboard
+  because the command asked for it — but nothing repainted the classes. The board was rendered into
+  `.zr-board-host`, which `.zr-mode-page .zr-board-host { display: none }` hides, and the visible
+  layer was the empty page. Symptom: run **编译成白板 / open as a whiteboard** and see nothing at all
+  (setting the default mode to whiteboard worked, because then `onOpen()` painted the right classes).
+- The mode classes are now applied **inside the render path** (`renderFile()`), not merely while
+  building the UI: whichever layer is about to be filled is made visible first. The rule is written
+  down next to the code, because "visibility is not a one-time setup" is exactly the sort of
+  invariant that silently rots.
+- `npm run verify:board` now **reproduces the bug before asserting the fix** (35 assertions): it
+  paints the page classes, renders the board *without* re-aligning them, and asserts that exactly
+  **0** cards are visible — then re-renders through the real path and asserts all of them are. A test
+  that cannot fail is not a test.
+- Board rendering failures are no longer silent: a caught error raises a Notice (and a console
+  error) instead of leaving a blank view — on a phone there is no console to open.
+- Keyboard shortcuts (`+` `-` `0`) are registered once per view instead of once per UI rebuild,
+  so toggling the mode no longer handles the same key twice.
+
+## 1.3.0
+
+- **Whiteboard mode: the note is compiled into a board, instead of being put on one.** The previous
+  version rendered the whole note as one tall page inside a zoomable surface. This version adds the
+  other reading model: the Markdown itself becomes the board. Every heading turns into a card
+  holding that section's content, frontmatter is dropped (it is metadata, not the note), and code
+  fences, tables, callouts, quotes, math, images and Mermaid blocks become typed blocks inside their
+  card — a `#` inside a code fence is deliberately *not* a heading. Cards are laid out as a tidy
+  tree (children in the next column, vertically centred against their parent) with bezier
+  connectors from the parent's right edge to the child's left edge, so the outline is visible at a
+  glance on a phone and readable after a pinch.
+- **Heights come from the real DOM, twice.** Estimating Chinese text height is guesswork, so the
+  board is laid out once from an estimate (the board appears immediately) and again from measured
+  `offsetHeight` values. Tables, images and long paragraphs then take exactly the room they need,
+  and no card can overlap another.
+- **Deep headings fold into their ancestor card.** Chinese notes often run four or five heading
+  levels deep, and one column per level turns the board into a thin ribbon: sections deeper than the
+  configured depth are folded in as subsections. A card limit folds deeper automatically, so a note
+  with hundreds of headings cannot stall a phone, and the root card says how many cards there are.
+- **Tap a card title to bring that card to the front**, 回到全图 fits the whole board, 回到标题卡
+  returns to the root. Links inside a card keep their normal meaning: only the card head and its
+  focus button zoom. The board transition is 240 ms, and it is cancelled the moment a pointer goes
+  down so dragging never feels laggy.
+- **The settings page is bilingual and searchable.** Every setting now reads 中文 / English — name,
+  description and the options of every dropdown — and on Obsidian 1.13+ the page is declared through
+  `getSettingDefinitions()`, so settings appear in the **settings search**: typing 双指 or pinch
+  jumps straight to the two-finger switch (**双指捏合缩放 / Two-finger pinch zoom**), which is exactly
+  what could not be found before. The content lives in one data module (src/settings-spec.ts) and is
+  rendered twice — declaratively on 1.13+, imperatively on 1.5.7–1.12 — so older versions get the
+  same page. A new 手势速查 / gesture cheat sheet lists every gesture in both languages.
+- **Two-finger pinch is now a setting, with a sensitivity slider.** Turning it off leaves two fingers
+  panning with their midpoint (handy when an IME or stylus emits a phantom second pointer); the
+  slider scales the pinch ratio between 0.5x and 2x.
+- **The zoom button on images and diagrams moved to the top-left corner by default.** The top-right
+  corner is where Obsidian puts its own 编辑源文件 / edit source and more-options controls, and the
+  button used to cover them (reported from a real phone). The corner is a setting, so anyone who
+  preferred the old position can put it back — and both placement paths (persistent inline button and
+  hover singleton) follow it.
+- New settings: 打开笔记时的默认模式 / default mode (page or whiteboard), 卡片宽度 / card width,
+  卡片展开层级 / outline depth, 卡片间距 / card spacing, 显示连线 / connectors, 卡片数量上限 /
+  card limit, 放大按钮的位置 / zoom button corner.
+- Zoom and position are now remembered **per mode** (page and whiteboard have different sizes, so
+  sharing one transform made them fight). Whiteboard positions use the same `data.json`, with a
+  `#board` suffix.
+- Whiteboard mode is reachable from the command palette, the ribbon icon, the view toolbar, and the
+  file-list context menu (编译成白板 / open as a whiteboard) — the last one so a phone user can go
+  straight from the file list into a board without opening the note first.
+
+Verification: `npm test` now has 84 unit tests, including the board compiler (fenced code,
+frontmatter, table detection, heading level jumps, folding) and a contract test that fails if any
+setting is missing its Chinese or English half. `npm run verify:board` is new: 32 assertions in a
+real Chromium, asserting the geometry from the DOM — cards never overlap, every card is inside the
+board bounds, every connector lands on its cards' edges, the measured height equals the layout
+height (the second pass working), Ctrl+wheel keeps its anchor, a drag keeps panning without
+zooming, and a click on a card title really centres that card — on a desktop viewport and with real
+CDP touch events on a phone viewport. `npm run verify:gestures` grew the zoom-button corner
+assertions (default top-left, the top-right edit zone stays clear, and switching the setting moves
+the button back).
+
 ## 1.2.4
 
 - **Wider diagram boxes: boxes now follow the text, the way PlantUML lays them out.** Mermaid caps a

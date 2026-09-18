@@ -13,6 +13,7 @@
  *   ④ 打开即「适配窗口」，同时显示原始尺寸与当前比例 —— 用户知道自己看的是多大。
  * ========================================================================== */
 
+import type { ZoomButtonCorner } from "./settings-spec";
 import { Transform, ZoomPanLayer, formatPercent } from "./zoom-pan";
 
 export interface LightboxOptions {
@@ -385,6 +386,9 @@ export interface ZoomAffordanceOptions {
   images: boolean;
   diagrams: boolean;
   onTarget: (target: LightboxTarget) => void;
+  /** 按钮贴哪个角。默认左上：右上角是 Obsidian 自己的「编辑源文件 / 更多选项」入口，
+   * 按钮贴在那里会把它盖住（用户实测反馈）。 */
+  corner?: ZoomButtonCorner;
   /** 按钮常驻显示（默认 true）。false = 只有指针悬停在图上才出现 */
   persistent?: boolean;
   /** 桌面是否也用「点击图片」作为入口（默认 false：桌面只认悬停按钮） */
@@ -498,9 +502,10 @@ export function installZoomAffordance(doc: Document, opts: ZoomAffordanceOptions
       hide();
       return;
     }
-    /* 右上角内侧（距边 6px）后，再夹进可视区域：比视口更宽的图
-     * （1600px 的图放在 900px 窗口里）右上角在屏幕外，不夹就点不到按钮。 */
-    const left = Math.max(gap, Math.min(rect.right - size - gap, viewW - size - gap));
+    /* 贴角内侧（距边 6px）后，再夹进可视区域：比视口更宽的图
+     * （1600px 的图放在 900px 窗口里）另一个角在屏幕外，不夹就点不到按钮。 */
+    const wanted = opts.corner === "top-right" ? rect.right - size - gap : rect.left + gap;
+    const left = Math.max(gap, Math.min(wanted, viewW - size - gap));
     const top = Math.max(gap, Math.min(rect.top + gap, viewH - size - gap));
     button.style.left = left + "px";
     button.style.top = top + "px";
@@ -623,7 +628,8 @@ function bindPersistent(doc: Document, opts: ZoomAffordanceOptions): () => void 
 
     const button = doc.createElement("button");
     button.type = "button";
-    button.className = "zr-zoom-affordance zr-zoom-affordance-inline";
+    button.className =
+      "zr-zoom-affordance zr-zoom-affordance-inline " + (opts.corner === "top-right" ? "is-right" : "is-left");
     button.setAttribute("aria-label", opts.label || "Zoom in");
     button.title = opts.label || "Zoom in";
     button.appendChild(buildZoomIcon(doc));

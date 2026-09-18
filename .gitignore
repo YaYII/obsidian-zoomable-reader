@@ -13,3 +13,6 @@ data.json
 # 验证台产物
 tests/browser/out/
 *.log
+
+# 代码审查工具产物（dsh-code-review：lint/test/bench/report）
+.code-review/

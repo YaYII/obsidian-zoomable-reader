@@ -216,11 +216,26 @@ try {
   const btnBox = await lb.evaluate(() => window.lightboxHarness.affordanceBoxFor("photo"));
   assert(!!btnBox, "常驻按钮存在且可定位", btnBox ? Math.round(btnBox.width) + "x" + Math.round(btnBox.height) : "未找到");
   if (btnBox) {
-    const nearRight = Math.abs(photoBox.x + photoBox.width - btnBox.right - 6) <= 2;
+    /* 默认左上：右上角是 Obsidian 自己的「编辑源文件 / 更多选项」入口，
+     * 按钮贴那儿会把它盖住 —— 这是用户实测反馈，所以钉成断言。 */
+    const nearLeft = Math.abs(btnBox.left - photoBox.x - 6) <= 2;
     const nearTop = Math.abs(btnBox.top - photoBox.y - 6) <= 2;
-    assert(nearRight && nearTop, "按钮贴在图片显示区域的右上角内侧（距边 6px）",
-      "图片右上 (" + Math.round(photoBox.x + photoBox.width) + "," + Math.round(photoBox.y) + ") 按钮 (" + Math.round(btnBox.right) + "," + Math.round(btnBox.top) + ")");
+    assert(nearLeft && nearTop, "按钮默认贴在图片左上角内侧（距边 6px）",
+      "图片左上 (" + Math.round(photoBox.x) + "," + Math.round(photoBox.y) + ") 按钮 (" + Math.round(btnBox.left) + "," + Math.round(btnBox.top) + ")");
   }
+  const coversEditEntry = await lb.evaluate(() => window.lightboxHarness.coversTopRightCorner("photo"));
+  assert(!coversEditEntry, "按钮不盖住右上角的编辑入口区（用户报的那个问题）",
+    coversEditEntry ? "重叠了" : "右上角 32x32 区域干净");
+  const leftClass = await lb.evaluate(() => window.lightboxHarness.affordanceClassFor("photo"));
+  assert(!!leftClass && leftClass.indexOf("is-left") >= 0, "按钮带 is-left 标记（角由设置决定）", leftClass || "无类名");
+
+  /* 切成右上角：设置真的起作用（老用户想要老位置也不拦着） */
+  await lb.evaluate(() => window.lightboxHarness.setCorner("top-right"));
+  const rightBox = await lb.evaluate(() => window.lightboxHarness.affordanceBoxFor("photo"));
+  const rightClass = await lb.evaluate(() => window.lightboxHarness.affordanceClassFor("photo"));
+  assert(!!rightBox && Math.abs(photoBox.x + photoBox.width - rightBox.right - 6) <= 2 && rightClass.indexOf("is-right") >= 0,
+    "设置改成右上角后：按钮真的回到右上角内侧", rightClass || "未找到按钮");
+  await lb.evaluate(() => window.lightboxHarness.setCorner("top-left"));
 
   await lb.screenshot({ path: path.join(OUT, "lightbox-affordance.png") });
 
@@ -315,9 +330,9 @@ try {
   assert(!closedByBackground, "点击空白背景也能关闭", "open=" + closedByBackground);
 
   const diagramBtn = await lb.evaluate(() => window.lightboxHarness.affordanceBoxFor("diagram"));
-  const hostRight = hostBox.x + hostBox.width;
-  assert(!!diagramBtn && Math.abs(hostRight - diagramBtn.right - 6) <= 2,
-    "常驻按钮也贴在图表区域的右上角", diagramBtn ? "图表右 " + Math.round(hostRight) + " 按钮右 " + Math.round(diagramBtn.right) : "未出现");
+  assert(!!diagramBtn && Math.abs(diagramBtn.left - hostBox.x - 6) <= 2,
+    "常驻按钮也贴在图表区域的左上角（与图片同一套摆放逻辑）",
+    diagramBtn ? "图表左 " + Math.round(hostBox.x) + " 按钮左 " + Math.round(diagramBtn.left) : "未出现");
   await lb.mouse.click(diagramBtn.left + diagramBtn.width / 2, diagramBtn.top + diagramBtn.height / 2);
   await lb.waitForTimeout(150);
   const diagramOpen = await lb.evaluate(() => ({
@@ -385,6 +400,11 @@ try {
   await lb.waitForTimeout(120);
   const hoverShown = await lb.evaluate(() => window.lightboxHarness.affordanceVisible());
   assert(hoverShown, "悬停模式：指针移到图上按钮出现", "visible=" + hoverShown);
+  /* 悬停模式走的是另一段摆放代码（position: fixed 的单例按钮），角也必须跟着设置走 */
+  const hoverBox = await lb.evaluate(() => window.lightboxHarness.affordanceBox());
+  assert(!!hoverBox && Math.abs(hoverBox.left - photoBox.x - 6) <= 3,
+    "悬停模式的按钮同样默认贴左上（两段摆放代码行为一致）",
+    hoverBox ? "按钮 left=" + Math.round(hoverBox.left) + " 图片 left=" + Math.round(photoBox.x) : "未找到按钮");
   await lb.evaluate(() => window.lightboxHarness.setPersistentMode());
   await lb.waitForTimeout(120);
 
