@@ -375,6 +375,80 @@ try {
   await lb.evaluate(() => window.lightboxHarness.lightbox.close());
   await lb.waitForTimeout(120);
 
+  /* ③c 原图高清：正文里那张可能只是缩略图（srcset 挑了小的、或被懒加载塞了 1px 占位图），
+   *     查看器的语义是「我要看原图」—— 用户原话：「点击图片的时候，你需要确定放大的图片是原图高清的」。 */
+  const noteSrcset = await lb.evaluate(() => window.lightboxHarness.noteNatural("srcset-img"));
+  await lb.evaluate(() => window.lightboxHarness.openSrcset());
+  await lb.waitForTimeout(320);
+  const srcsetProbe = await lb.evaluate(() => window.lightboxHarness.probe());
+  /* 注意这条断言的边界：无头 Chromium 在本地给 srcset 挑的就是最大的那张（"big"），
+   * 所以它证明的是「最终拿到的是最大候选 1600px」，不能证明「比浏览器更会挑」——
+   * 「挑最大的一张」这条逻辑由 tests/lightbox.test.ts 的 pickHiResSource 单测钉住，
+   * 浏览器这一侧的可判定场景是下面的懒加载占位图（旧代码实测只拿到 1x1）。 */
+  assert(!!srcsetProbe && srcsetProbe.naturalWidth === 1600,
+    "查看器最终拿到的是 srcset 里最大的那张（1600px 原图，而不是正文里的显示尺寸）",
+    (noteSrcset ? "浏览器给正文挑了 " + noteSrcset.which + "（滑位 " + noteSrcset.width + "px）" : "?") + " → 查看器 " + (srcsetProbe ? srcsetProbe.naturalWidth : "?") + "px");
+  await lb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await lb.waitForTimeout(120);
+
+  await lb.evaluate(() => window.lightboxHarness.openLazy());
+  await lb.waitForTimeout(320);
+  const lazyProbe = await lb.evaluate(() => window.lightboxHarness.probe());
+  assert(!!lazyProbe && lazyProbe.naturalWidth === 900,
+    "src 是 1px 占位图（懒加载）时改用 data-src 的真图",
+    lazyProbe ? lazyProbe.naturalWidth + "x" + lazyProbe.naturalHeight + "px" : "未打开");
+  await lb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await lb.waitForTimeout(120);
+
+  /* ③d 该关得掉：关闭按钮钉在【图片区域的右上角】（用户要求） */
+  await lb.evaluate(() => window.lightboxHarness.openImage());
+  await lb.waitForTimeout(320);
+  const closeBox = await lb.evaluate(() => window.lightboxHarness.closeButton());
+  assert(!!closeBox && closeBox.inViewport && closeBox.gapTop <= 20 && closeBox.gapRight <= 20 && closeBox.display !== "none",
+    "关闭按钮钉在图片区域的右上角（与图片缩放无关，永远在同一个位置）",
+    closeBox ? Math.round(closeBox.width) + "x" + Math.round(closeBox.height) + " · 距边 " + closeBox.gapRight + "/" + closeBox.gapTop + "px" : "没有按钮");
+  assert(!!closeBox && closeBox.width >= 30,
+    "关闭按钮是够大的独立按钮（不是工具条里那个 12px 的小叉）", closeBox ? Math.round(closeBox.width) + "px" : "?");
+  if (closeBox) {
+    await lb.mouse.click(closeBox.left + closeBox.width / 2, closeBox.top + closeBox.height / 2);
+    await lb.waitForTimeout(220);
+  }
+  /* 按钮不存在时这条必然为假（旧代码就是：浮层里没有关闭按钮），
+   * 但不能因为拿不到坐标就抛异常 —— 崩在这里会让后面所有断言都跑不到。 */
+  const closedByButton = await lb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), overlays: window.lightboxHarness.overlayCount() }));
+  assert(!!closeBox && !closedByButton.open && closedByButton.overlays === 0,
+    "真实鼠标点右上角关闭按钮 → 关掉放大图", closeBox ? "overlays=" + closedByButton.overlays : "没有关闭按钮");
+
+  /* ③e 点图片 = 原图 100%（用户要的「点击图片 → 确定是原图高清」） */
+  await lb.evaluate(() => window.lightboxHarness.openImage());
+  await lb.waitForTimeout(320);
+  const fitScale0 = await lbState();
+  const imgRect = await lb.evaluate(() => window.lightboxHarness.imageRect());
+  await lb.mouse.click(imgRect.left + imgRect.width / 2, imgRect.top + imgRect.height / 2);
+  await lb.waitForTimeout(220);
+  const tapped = await lb.evaluate(() => ({ t: window.lightboxHarness.transform(), size: window.lightboxHarness.sizeText() }));
+  assert(near(tapped.t.scale, 1, 0.02) && /原图|native/.test(String(tapped.size)),
+    "点一下图片 → 落到原图 100%（读数同时标明「原图 / native」）",
+    fmt(fitScale0.scale) + " → " + fmt(tapped.t.scale) + " · " + tapped.size);
+  await lb.waitForTimeout(430); /* 越过双击窗口：慢慢点第二下 = 收回适配 */
+  await lb.mouse.click(imgRect.left + imgRect.width / 2, imgRect.top + imgRect.height / 2);
+  await lb.waitForTimeout(220);
+  const tappedBack = await lbState();
+  assert(near(tappedBack.scale, fitScale0.scale, 0.05),
+    "再点一下（慢点）→ 收回适配宽度", fmt(tapped.t.scale) + " → " + fmt(tappedBack.scale));
+
+  const beforeDrag = await lbState();
+  await lb.mouse.move(imgRect.left + 60, imgRect.top + 60);
+  await lb.mouse.down();
+  await lb.mouse.move(imgRect.left + 180, imgRect.top + 140, { steps: 10 });
+  await lb.mouse.up();
+  await lb.waitForTimeout(220);
+  const afterDrag = await lbState();
+  assert(near(afterDrag.scale, beforeDrag.scale, 0.001),
+    "拖动平移松手不会误触发「点击 → 原图」（防误触）", fmt(beforeDrag.scale) + " → " + fmt(afterDrag.scale));
+  await lb.evaluate(() => window.lightboxHarness.lightbox.close());
+  await lb.waitForTimeout(120);
+
   /* ④ 其它插件画出来的 svg（只有 viewBox / width=100% / 固定像素）也必须能放大，
    *    而且不能再被 8 倍上限卡住（用户报的「其它 svg 放大失效」）。 */
   for (const svgId of ["svg-viewbox", "svg-percent", "svg-fixed"]) {
@@ -522,6 +596,29 @@ try {
     mActual ? "scale=" + fmt(mActual.scale) + " · 物理像素 " + mActual.devicePixels + " / 源 " + mActual.naturalWidth : "未打开");
   await mLb.evaluate(() => window.lightboxHarness.lightbox.close());
   await mLb.waitForTimeout(120);
+
+  /* ⑦ 手机：右上角关闭按钮 44px（手指按得到）+ 触摸图片 = 原图 */
+  await mLb.evaluate(() => window.lightboxHarness.openImage());
+  await mLb.waitForTimeout(320);
+  const mClose = await mLb.evaluate(() => window.lightboxHarness.closeButton());
+  assert(!!mClose && mClose.width >= 44 && mClose.height >= 44 && mClose.gapTop <= 20 && mClose.gapRight <= 20,
+    "手机关闭按钮 44px 且钉在图片右上角（Apple HIG 的最小可点尺寸）",
+    mClose ? Math.round(mClose.width) + "x" + Math.round(mClose.height) + " · 距边 " + mClose.gapRight + "/" + mClose.gapTop + "px" : "没有按钮");
+  const mImgRect = await mLb.evaluate(() => window.lightboxHarness.imageRect());
+  await mTouch("touchStart", [{ x: mImgRect.left + mImgRect.width / 2, y: mImgRect.top + mImgRect.height / 2 }]);
+  await mTouch("touchEnd", []);
+  await mLb.waitForTimeout(240);
+  const mTapNative = await mLb.evaluate(() => ({ t: window.lightboxHarness.transform(), size: window.lightboxHarness.sizeText() }));
+  assert(near(mTapNative.t.scale, 1, 0.02) && /原图|native/.test(String(mTapNative.size)),
+    "手机：触摸图片 → 落到原图 100%", fmt(mTapNative.t.scale) + " · " + mTapNative.size);
+  if (mClose) {
+    await mTouch("touchStart", [{ x: mClose.left + mClose.width / 2, y: mClose.top + mClose.height / 2 }]);
+    await mTouch("touchEnd", []);
+    await mLb.waitForTimeout(240);
+  }
+  const mClosedByBtn = await mLb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), overlays: window.lightboxHarness.overlayCount() }));
+  assert(!!mClose && !mClosedByBtn.open && mClosedByBtn.overlays === 0,
+    "手机：触摸右上角关闭按钮 → 关掉放大图（不用去找工具条）", mClose ? "overlays=" + mClosedByBtn.overlays : "没有关闭按钮");
 
   assert(mLbErrors.length === 0, "查看器手机验证台无脚本错误", mLbErrors.slice(0, 2).join(" | ") || "无");
   await mLbCtx.close();

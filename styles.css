@@ -195,6 +195,52 @@ body.is-mobile .zr-label {
   cursor: grabbing;
 }
 
+/* --- 关闭按钮：钉在图片区域的右上角 ---------------------------------------- */
+/* 用户要求：「放大后的图片，右上角应该有一个关闭的按钮，方便关闭放大的图」。
+ * 不放进工具条：放大之后视线在图里，工具条最右端那个 12px 的小叉既难找也难按；
+ * 位置固定在视口右上角、与图片的缩放平移无关（图跑到哪儿它都在那儿）。
+ * 视觉 34px / 触屏 44px（Apple HIG 的最小可点尺寸），跟着安全区走。 */
+.zr-lightbox-close {
+  position: absolute;
+  z-index: 2;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 50%;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-s, 0 1px 3px rgba(0, 0, 0, 0.16));
+  opacity: 0.92;
+  /* 双击缩放由图片自己管，这里只要「按一下就关」 */
+  touch-action: manipulation;
+}
+
+.zr-lightbox-close:hover,
+.zr-lightbox-close:focus-visible {
+  opacity: 1;
+  background-color: var(--background-modifier-hover);
+  border-color: var(--interactive-accent, var(--text-accent));
+}
+
+/* 触屏：手指按不准，做成 44px 的实心圆 */
+@media (hover: none) {
+  .zr-lightbox-close {
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+    opacity: 1;
+  }
+}
+
 /* 刻意【不写】will-change: transform：
  * 它会把这个画布提成一层合成层，并且只在「提层时的比例」上栅格化一次；
  * 之后用户放大，浏览器只是把这张位图拉伸 —— 位图（图片）会软，CSS 画的文字

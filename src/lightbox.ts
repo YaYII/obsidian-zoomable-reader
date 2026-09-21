@@ -40,6 +40,92 @@ export function nativePixelSize(natural: number, dpr: number): number {
   return Math.round((natural / ratio) * 100) / 100;
 }
 
+/** 挑「最清晰的那张原图」时用的信息（只有这五个字段有用，方便单测喂假数据）。 */
+export interface HiResSourceInput {
+  /** 浏览器当前实际用的那张（取决于笔记里的显示尺寸与 DPR） */
+  currentSrc?: string;
+  src?: string;
+  /** 逗号分隔的候选（`url 1600w` / `url 2x`） */
+  srcset?: string;
+  /** 相对地址的解析基准（img.baseURI） */
+  baseURI?: string;
+  /** 懒加载插件常把真图放这里，src 里是一张 1px 占位图 */
+  dataSrc?: string;
+}
+
+/** 1px 透明占位图（懒加载）：以它为 src 打开查看器只会得到一张 1x1 的「高清」。 */
+function isPlaceholder(url: string): boolean {
+  return /^data:image\/(gif|png);base64,R0lGODlhAQABAI/i.test(url) || /^data:image\/gif;base64,R0lGOD/i.test(url);
+}
+
+/**
+ * 从 srcset 里挑分辨率最高的候选，没有 srcset 就用 currentSrc / src。
+ *
+ * 为什么需要它：笔记里的 <img> 可能带 srcset（浏览器按【笔记里的显示尺寸】× DPR 挑一张），
+ * 也可能被懒加载插件塞了一张 1px 占位图，真图在 data-src 里。查看器的语义是「我要看原图」，
+ * 不是「我要看正文里那张缩略图」—— 用户原话：「点击图片的时候，你需要确定放大的图片是原图高清的」。
+ */
+export function pickHiResSource(img: HiResSourceInput): string {
+  const base = img.baseURI || "";
+  const srcset = typeof img.srcset === "string" ? img.srcset : "";
+  if (srcset.trim()) {
+    let best: { url: string; weight: number } | null = null;
+    for (const candidate of parseSrcset(srcset)) {
+      if (!best || candidate.weight > best.weight) best = candidate;
+    }
+    if (best) return absolute(best.url, base);
+  }
+  const direct = img.currentSrc || img.src || "";
+  if (direct && !isPlaceholder(direct)) return absolute(direct, base);
+  /* src 是占位图：真图在 data-src（懒加载插件的惯例） */
+  if (img.dataSrc) return absolute(img.dataSrc, base);
+  return absolute(direct, base);
+}
+
+/**
+ * 切分 srcset：**不能简单地按逗号 split** —— data: URL 里全是逗号
+ * （`data:image/png;base64,iVBORw0KG…`），切完每个候选都成了半截地址，图直接加载不出来。
+ * 这里按 HTML 规范的口径扫：URL 遇到空白就结束（data: 的 URL 里允许有逗号），
+ * 之后再读描述符（`1600w` / `2x`），读到逗号为止。
+ * 验证台就是这么抓到这条的：srcset 用 data URL 造的两张候选，旧写法让查看器拿到自然尺寸 0。
+ */
+export function parseSrcset(srcset: string): Array<{ url: string; weight: number }> {
+  const out: Array<{ url: string; weight: number }> = [];
+  const isSpace = (c: string) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+  let i = 0;
+  while (i < srcset.length) {
+    while (i < srcset.length && (isSpace(srcset[i]) || srcset[i] === ",")) i += 1;
+    if (i >= srcset.length) break;
+    let url = "";
+    const isDataUrl = srcset.startsWith("data:", i);
+    while (i < srcset.length && !isSpace(srcset[i]) && (isDataUrl || srcset[i] !== ",")) {
+      url += srcset[i];
+      i += 1;
+    }
+    let descriptor = "";
+    while (i < srcset.length && isSpace(srcset[i])) i += 1;
+    while (i < srcset.length && srcset[i] !== ",") {
+      descriptor += srcset[i];
+      i += 1;
+    }
+    if (!url) continue;
+    /* 无描述符 = 1x（最保守）；w 与 x 都按数值比大小（同一份 srcset 里不会混用两种单位）。 */
+    const value = Number.parseFloat(descriptor);
+    out.push({ url: url, weight: Number.isFinite(value) && value > 0 ? value : 1 });
+  }
+  return out;
+}
+
+/** 相对地址按文档基准解析成绝对地址（srcset 里的相对路径必须自己拼）。 */
+function absolute(url: string, base: string): string {
+  if (!base || /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith("//")) return url;
+  try {
+    return new URL(url, base).href;
+  } catch {
+    return url;
+  }
+}
+
 interface MovedNode {
   node: Element;
   parent: Node;
@@ -70,7 +156,14 @@ export class ImageLightbox {
 
   /** 打开一张 <img>（用它的自然尺寸放大查看）。 */
   openImage(img: HTMLImageElement): void {
-    const src = img.currentSrc || img.src;
+    /* 原图优先：srcset 里挑最大的那张，src 是占位图就用 data-src（见 pickHiResSource）。 */
+    const src = pickHiResSource({
+      currentSrc: img.currentSrc,
+      src: img.src,
+      srcset: img.getAttribute("srcset") || undefined,
+      dataSrc: img.getAttribute("data-src") || img.getAttribute("data-original") || undefined,
+      baseURI: img.baseURI || this.doc.baseURI,
+    });
     if (!src) return;
     const probe = this.doc.createElement("img");
     probe.className = "zr-lightbox-image";
@@ -215,10 +308,27 @@ export class ImageLightbox {
     size.className = "zr-lightbox-size";
     bar.appendChild(size);
 
-    bar.appendChild(this.button("x", "Close (Esc)", () => this.close()));
-
     root.appendChild(bar);
     root.appendChild(viewport);
+
+    /* 关闭按钮：钉在【图片区域的右上角】，与图片的缩放/平移无关，永远在同一个位置。
+     * 用户要求：「放大后的图片，右上角应该有一个关闭的按钮，方便关闭放大的图」。
+     * 为什么不再只留工具条最右端那个小 ×：放大之后视线在图里，工具条里的 12px 小叉既难找也难按；
+     * 这一个按 44px（手机）做，闭眼也按得到。（工具条里的 × 已去掉：两个关闭按钮只会让人犹豫。） */
+    const closeButton = this.doc.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "zr-lightbox-close";
+    closeButton.title = "Close (esc)";
+    closeButton.setAttribute("aria-label", "Close (esc)");
+    closeButton.textContent = "×";
+    const closeNow = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.close();
+    };
+    closeButton.addEventListener("click", closeNow);
+    closeButton.addEventListener("touchend", closeNow);
+    viewport.appendChild(closeButton);
     /* 先把内部状态与手势层建好，最后才挂到 DOM 上：
      * 这样任何一步抛错都不会在页面上留下一个「半成品浮层」——验证台就是这么
      * 抓到过一次：过去用 Obsidian 专有的 body.addClass()，在普通浏览器里直接抛，
@@ -259,6 +369,7 @@ export class ImageLightbox {
       if (this.keyHandler) this.doc.removeEventListener("keydown", this.keyHandler);
     });
 
+    this.bindTapToNative(content);
     fs_focus(focusReturn);
     if (this.opts.fitOnOpen === false) this.setActualSize();
     else this.afterContentReady();
@@ -309,8 +420,74 @@ export class ImageLightbox {
       const h = this.naturalHeight ? Math.round(this.naturalHeight) : 0;
       const dims = w && h ? w + " x " + h + " px" : "";
       const shown = w && h ? Math.round(w * t.scale) + " x " + Math.round(h * t.scale) + " px" : "";
-      this.sizeEl.textContent = dims && shown ? dims + " → " + shown : dims;
+      /* 100% = 1 源像素 = 1 设备像素（见 nativePixelSize）：这一行就是「你看的是真高清」的证据，
+       * 也是用户在设置里/在手机上一眼能确认的东西。 */
+      const native = w && h && Math.abs(t.scale - 1) < 0.02 ? " · 原图 / native" : "";
+      this.sizeEl.textContent = dims && shown ? dims + " → " + shown + native : dims;
     }
+  }
+
+  /**
+   * 点击图片 = 在原图（100%）与适配之间切换。
+   * 用户要求：「点击图片的时候，你需要确定放大的图片是原图高清的」—— 点一下就给你原图分辨率。
+   *
+   * 三条防误触（都来自真事件）：
+   *   ① 位移 ≤ 8px、时长 ≤ 500ms：拖动平移松手的那一下不能算点击；
+   *   ② 全程只有一根手指：捏合不算；
+   *   ③ 挂在内容元素上而不是视口上：手势层一旦判定为拖动就会 setPointerCapture，
+   *      之后的 pointerup 会重定向到视口 —— 手里的 pointerup 根本收不到，天然躲开拖动。
+   * 双击仍归手势层（放大到 200%）：第一次点击先落到 100%，第二次接着放大到 200%，
+   * 结果与从前一致，不会互相抵消。
+   */
+  private bindTapToNative(content: Element): void {
+    let start: { x: number; y: number; at: number } | null = null;
+    let fingers = 0;
+    const onDown = (event: PointerEvent) => {
+      fingers += 1;
+      if (fingers > 1) {
+        start = null; /* 多指 = 捏合，不参与点击判定 */
+        return;
+      }
+      if (event.target instanceof Element && event.target.closest(".zr-lightbox-close")) {
+        start = null;
+        return;
+      }
+      start = { x: event.clientX, y: event.clientY, at: Date.now() };
+    };
+    const onUp = (event: PointerEvent) => {
+      fingers = Math.max(0, fingers - 1);
+      const from = start;
+      start = null;
+      if (!from || !this.layer) return;
+      if (Math.hypot(event.clientX - from.x, event.clientY - from.y) > TAP_SLOP) return;
+      if (Date.now() - from.at > TAP_MS) return;
+      const box = this.layerBox();
+      const scale = this.layer.transform.scale;
+      if (Math.abs(scale - 1) < 0.02) {
+        this.fit(); /* 已经在原图 → 收回适配，方便看全图 */
+        return;
+      }
+      this.layer.zoomTo(1, { x: event.clientX - box.left, y: event.clientY - box.top });
+    };
+    const onCancel = () => {
+      start = null;
+      fingers = 0;
+    };
+    content.addEventListener("pointerdown", onDown);
+    content.addEventListener("pointerup", onUp);
+    content.addEventListener("pointercancel", onCancel);
+    this.cleanup.push(() => {
+      content.removeEventListener("pointerdown", onDown);
+      content.removeEventListener("pointerup", onUp);
+      content.removeEventListener("pointercancel", onCancel);
+    });
+  }
+
+  /** 手势层（视口）的矩形：把客户端坐标换成视口内坐标。 */
+  private layerBox(): { left: number; top: number } {
+    const box = this.root ? this.root.querySelector(".zr-lightbox-viewport") : null;
+    const rect = (box || this.root || this.doc.body).getBoundingClientRect();
+    return { left: rect.left, top: rect.top };
   }
 
   private button(icon: string, title: string, onClick: () => void): HTMLButtonElement {
@@ -441,6 +618,10 @@ interface AffordanceHit {
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** 一次「点击」的判定阈值（见 ImageLightbox.bindTapToNative）：位移与时长 */
+const TAP_SLOP = 8;
+const TAP_MS = 500;
 
 /** 太小的 svg 多半是图标（callout 图标、按钮图标、行内符号），不该接管。 */
 const MIN_DIAGRAM_WIDTH = 96;

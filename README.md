@@ -34,6 +34,10 @@ columns, just a wide sheet of paper you read downwards.
 - **放大查看就是高清**：查看器按「1 个源像素 = 1 个设备像素」摆放 —— 读数显示 100% 时，你看到的就是
   原图分辨率（DPR 3 的手机上，一张 1600px 的截图摆成约 533 CSS px，而不是 1600 CSS px）。
   打开时也不会为了「适配」把小图拉大：放大是插值，插值就是糊。
+- **查看器拿的是原图，不是正文里那张缩略图**：正文里的图片可能是 `srcset` 里挑出来的小图，或者被
+  懒加载插件换成 1px 占位图（真图在 `data-src`）。查看器会自己取分辨率最高的那张。
+- **点一下图片 = 原图 100%**（读数会写明「原图 / native」），再点一下收回适配；**右上角有一个关闭按钮**
+  （手机 44px），不用去工具条里找那个小叉。
 
 ## Why this exists
 
@@ -80,6 +84,11 @@ Notes:
   touch devices (`@media (hover: none) { display: none }`) in favour of "just tap the image" — which
   meant tapping near an image edge often missed. It is now 34 px visually with a ~46 px tap area, and
   tapping it opens the viewer for that image or diagram (tapping the image still works).
+- **The viewer opens the original file, not the thumbnail the note happens to show.** If the
+  `<img>` carries a `srcset`, the viewer takes the highest-resolution candidate; if `src` is a 1 px
+  lazy-load placeholder, it follows `data-src`. Tapping the image jumps to 100 % (the readout says
+  `原图 / native`), tapping again fits it, and there is a dedicated **close button in the top-right
+  corner** (44 px on touch) instead of hunting for the small × in the toolbar.
 - **The viewer shows images at their real resolution.** The probe is laid out at
   `naturalWidth / devicePixelRatio`, so **100 % is 1 source pixel = 1 device pixel** — on a 3× phone
   a 1600 px screenshot sits at ~533 CSS px instead of being stretched over 4800 physical pixels.

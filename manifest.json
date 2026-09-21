@@ -1,7 +1,7 @@
 {
   "id": "zoomable-reader",
   "name": "Zoomable Reader",
-  "version": "1.3.10",
+  "version": "1.3.11",
   "minAppVersion": "1.5.7",
   "description": "Read any note on a pan-and-zoom board, or open it as a 1280 px whiteboard page. Pinch to zoom on mobile, Ctrl and wheel on desktop. Settings in Chinese and English.",
   "author": "YaYII",
