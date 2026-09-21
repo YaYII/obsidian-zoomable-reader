@@ -47,7 +47,13 @@ export interface DiagramLayout {
 }
 
 export const DEFAULT_DIAGRAM_LAYOUT: DiagramLayout = {
-  wrapWidth: 460,
+  /* 260 而不是 460：用户实测反馈 —— 460 时中文长标签是【一整行】把框顶得很宽
+   * （「一行顶一个宽度」），手机上必须横向滑着读。260 大约一行 16 个汉字，
+   * 长标签自然折成两三行，框变窄、图变紧凑。
+   * 注意：Mermaid 只对【markdown 字符串】标签按这个宽度折行，
+   * 普通 A[长文本] 不折行（10.9 实测：wrappingWidth 120 与 460 渲染完全一样）——
+   * 所以还需要 wrapLongMermaidLabels() 把长标签改写成 markdown 字符串。 */
+  wrapWidth: 260,
   nodePadding: 18,
   nodeSpacing: 55,
   rankSpacing: 60,
@@ -109,6 +115,9 @@ export function mergeDiagramConfig(
 
   Object.assign(section(merged, "flowchart"), {
     wrappingWidth: layout.wrapWidth,
+    /* markdownAutoWrap：让【markdown 字符串】标签真的按 wrappingWidth 折行。
+     * 普通 A[文本] 标签 Mermaid 从不折行（10.9 实测），见 wrapLongMermaidLabels()。 */
+    markdownAutoWrap: true,
     padding: layout.nodePadding,
     nodeSpacing: layout.nodeSpacing,
     rankSpacing: layout.rankSpacing,
@@ -152,7 +161,8 @@ export function applyDiagramLayout(
 
   /* 已经是我们设过的值就不再重复 initialize：layout-change 会频繁触发，
    * 每次都重设一遍配置既没必要，也可能把别人（其它插件）后来的改动顶掉。 */
-  if (asRecord(current.flowchart).wrappingWidth === layout.wrapWidth) return true;
+  const applied = asRecord(current.flowchart);
+  if (applied.wrappingWidth === layout.wrapWidth && applied.markdownAutoWrap === true) return true;
 
   mermaid.initialize(mergeDiagramConfig(current, layout, true));
   return true;

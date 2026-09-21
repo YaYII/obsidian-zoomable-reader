@@ -173,22 +173,34 @@ try {
   const naturalState = await page.evaluate(() => ({ box: window.harness.imageBox("photo"), css: window.harness.state().styleText }));
   assert(!naturalState.css.includes("img") && near(naturalState.box.width, 600, 2), "natural：不注入图片规则，完全交给主题", fmt(naturalState.box.width) + "px · 含 img 规则=" + naturalState.css.includes("img"));
 
-  /* ⑦-2 流程图（svg）：主题让 Mermaid 按自然尺寸渲染，插件必须把它拉回版心宽度 */
-  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" }));
-  await page.waitForTimeout(60);
-  const diagramFill = await page.evaluate(() => window.harness.imageBox("diagram"));
-  assert(
-    near(diagramFill.width, 900, 2),
-    "fill：流程图按版心宽度显示（自然 478px → 900px），不再按图片原有宽度",
-    fmt(diagramFill.width) + "px"
-  );
-  const diagramRatio = diagramFill.width / diagramFill.height;
-  assert(near(diagramRatio, 478 / 98, 0.05), "fill：流程图等比缩放，不变形（478:98 的比例保持）", "比例 " + fmt(diagramRatio) + "（期望 " + fmt(478 / 98) + "）");
+  /* ⑦-2 流程图（svg）：只保证【不溢出】，不再被拉伸到版心宽度。
+   * 为什么反过来（1.3.12）：拉伸是把 svg 连字带线一起放大 —— 478px 的图铺进 900px 版心是
+   * 1.9 倍，图里 16px 的字渲染成 30px。用户的要求是「文字大小应该固定，不能超过 16px」。 */
+  for (const imageWidth of ["fill", "contain"]) {
+    await page.evaluate((w) => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: w }), imageWidth);
+    await page.waitForTimeout(60);
+    const box = await page.evaluate(() => window.harness.imageBox("diagram"));
+    assert(
+      near(box.width, 478, 2),
+      imageWidth + "：流程图保持自然宽度 478px（不拉伸 —— 拉伸会把图里的字放大到超过 16px）",
+      fmt(box.width) + "px"
+    );
+  }
+  const diagramRatio = await page.evaluate(() => {
+    const box = window.harness.imageBox("diagram");
+    return box.width / box.height;
+  });
+  assert(near(diagramRatio, 478 / 98, 0.05), "流程图不变形（478:98 的比例保持）", "比例 " + fmt(diagramRatio) + "（期望 " + fmt(478 / 98) + "）");
 
-  await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "contain" }));
-  await page.waitForTimeout(60);
-  const diagramContain = await page.evaluate(() => window.harness.imageBox("diagram"));
-  assert(near(diagramContain.width, 478, 2), "contain：流程图不放大（仍是自然宽度 478px）", fmt(diagramContain.width) + "px");
+  const readingStyle = await page.evaluate(() => window.harness.state().styleText);
+  const start = readingStyle.indexOf(".markdown-reading-view .mermaid svg");
+  const diagramCss = start < 0 ? "" : readingStyle.slice(start, readingStyle.indexOf("}", start));
+  assert(
+    diagramCss.includes("max-width: 100% !important;") &&
+      !diagramCss.split("\n").some((line) => line.trim() === "width: 100% !important;"),
+    "注入的样式里图表只有 max-width（宽图缩进版心、窄图保持原样）",
+    diagramCss.split("\n").filter((l) => l.trim()).join(" / ").slice(0, 70)
+  );
 
   await page.evaluate(() => window.harness.setOptions({ lineWidth: 900, zoom: 1, imageWidth: "fill" }));
   await page.waitForTimeout(40);

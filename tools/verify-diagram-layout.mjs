@@ -144,6 +144,7 @@ try {
           svgW: svgBox ? Math.round(svgBox.width) : 0,
           svgH: svgBox ? Math.round(svgBox.height) : 0,
           font: label ? getComputedStyle(label).fontFamily.slice(0, 26) : "",
+          fontSize: label ? parseFloat(getComputedStyle(label).fontSize) : 0,
         };
       },
       [source, id]
@@ -157,7 +158,9 @@ try {
 
   const applied = await page.evaluate(() => {
     const win = { mermaid: window.mermaid };
-    return window.DiagramLayout.apply(win, { ...window.DiagramLayout.defaults, wrapWidth: 460 });
+    /* 用【出厂默认】而不是脚本里另写一个数：改默认值时断言会跟着走，
+     * 也不会出现「验证台测 460、插件实际 260」这种假绿。 */
+    return window.DiagramLayout.apply(win, window.DiagramLayout.defaults);
   });
   assert(applied === true, "装上了排版参数（用插件里的真代码，不是脚本里复制的副本）", "apply() = " + applied);
 
@@ -165,6 +168,7 @@ try {
     const cfg = window.mermaid.mermaidAPI.getConfig();
     return {
       wrap: cfg.flowchart.wrappingWidth,
+      markdownAutoWrap: cfg.flowchart.markdownAutoWrap,
       padding: cfg.flowchart.padding,
       useMaxWidth: cfg.flowchart.useMaxWidth,
       fontFamily: cfg.themeVariables.fontFamily,
@@ -181,7 +185,8 @@ try {
   };
 
   /* ① 宿主的设置一个都不能丢 —— 整块替换会把主题字体冲掉，中文会掉回默认字体 */
-  assert(config.wrap === 460, "标签宽度上限已放宽到 460px", "wrappingWidth = " + config.wrap);
+  assert(config.wrap === 260, "标签折行宽度 = 260px（一行约 16 个汉字）", "wrappingWidth = " + config.wrap);
+  assert(config.markdownAutoWrap === true, "markdownAutoWrap 打开（不打开的话折行宽度对标签完全不起作用）", "markdownAutoWrap = " + config.markdownAutoWrap);
   assert(config.padding > 15, "框内留白变大（PlantUML 的 padding 思路）", "padding = " + config.padding);
   assert(config.useMaxWidth === false, "宿主的 flowchart.useMaxWidth:false 仍在", "useMaxWidth = " + config.useMaxWidth);
   assert(config.seqUseMaxWidth === false, "宿主的 sequence.useMaxWidth:false 仍在", "sequence.useMaxWidth = " + config.seqUseMaxWidth);
@@ -195,8 +200,8 @@ try {
     before.md.lines + " 行 → " + after.md.lines + " 行"
   );
   assert(
-    after.md.boxW > before.md.boxW * 1.5,
-    "框随文字变宽（不再是被挤成窄条）",
+    after.md.boxW > before.md.boxW + 20,
+    "框随折行宽度变宽（不再被 200px 挤成窄条）",
     before.md.boxW + "px → " + after.md.boxW + "px"
   );
   assert(after.md.boxH < before.md.boxH, "框变矮（行数少了）", before.md.boxH + "px → " + after.md.boxH + "px");
@@ -206,6 +211,36 @@ try {
   assert(after.plain.nodes === before.plain.nodes, "普通标签的节点数不变", before.plain.nodes + " → " + after.plain.nodes);
   assert(after.plain.overflow <= 2, "普通标签也没有溢出", "溢出 " + after.plain.overflow + "px");
   assert(after.plain.font === before.plain.font, "字体没变（还是主题那一套）", after.plain.font);
+
+  /* ③b 用户点名的那条：「文字太多了，你应该可以换行呀，而不是一行顶一个宽度」。
+   * 真相是 Mermaid 对普通标签 A[长文本] 【从不折行】—— wrappingWidth 从 460 改到 120
+   * 渲染结果一模一样（上面 before/after 的普通标签就是证据）。所以插件把长标签改写成
+   * markdown 字符串，折行仍然交给 Mermaid 自己的布局。 */
+  const plainLong = ["flowchart TB", "  p[" + LONG_LABEL + "]"].join(NL);
+  const plainRaw = await measure(plainLong, "plain-raw");
+  const wrappedSource = await page.evaluate(
+    ([src, width]) => window.MermaidLabels.wrap(src, { maxWidth: width }),
+    [plainLong, 260]
+  );
+  const plainWrapped = await measure(wrappedSource, "plain-wrapped");
+  assert(
+    wrappedSource !== plainLong && wrappedSource.indexOf(TICK) > 0,
+    "长标签被改写成 markdown 字符串（插件里真代码，不是脚本里复制的副本）",
+    wrappedSource.replace(/\n/g, " ").slice(0, 58)
+  );
+  assert(plainRaw.lines === 1, "前提：普通标签本来是一行顶满（折行前的样子）", plainRaw.lines + " 行 · 框 " + plainRaw.boxW + "px");
+  assert(plainWrapped.lines >= 2, "改写成 markdown 字符串后真的折行了", plainRaw.lines + " 行 → " + plainWrapped.lines + " 行");
+  assert(
+    plainWrapped.boxW < plainRaw.boxW && plainWrapped.boxW <= 260 + 2 * 18 + 6,
+    "框跟着变窄（不再一行顶满整条宽度）",
+    plainRaw.boxW + "px → " + plainWrapped.boxW + "px"
+  );
+  assert(plainWrapped.overflow <= 2, "折行后文字没有溢出框", "溢出 " + plainWrapped.overflow + "px");
+  assert(
+    plainWrapped.fontSize === plainRaw.fontSize,
+    "折行不改字号（用户要求：字号固定、不超过 16px）",
+    plainWrapped.fontSize + "px"
+  );
 
   /* ④ 时序图：参与者间距真的生效（框更宽更松） */
   assert(
@@ -217,7 +252,9 @@ try {
   /* ⑤ 幂等：重复装不会把配置越改越乱 */
   const secondApply = await page.evaluate(() => {
     const win = { mermaid: window.mermaid };
-    return window.DiagramLayout.apply(win, { ...window.DiagramLayout.defaults, wrapWidth: 460 });
+    /* 用【出厂默认】而不是脚本里另写一个数：改默认值时断言会跟着走，
+     * 也不会出现「验证台测 460、插件实际 260」这种假绿。 */
+    return window.DiagramLayout.apply(win, window.DiagramLayout.defaults);
   });
   const afterSecond = await measure(FLOWCHART, "second-md");
   assert(secondApply === true && afterSecond.boxW === after.md.boxW, "重复安装是幂等的", afterSecond.boxW + "px = " + after.md.boxW + "px");

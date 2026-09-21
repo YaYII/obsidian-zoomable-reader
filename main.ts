@@ -1,6 +1,7 @@
 import { Menu, Notice, Platform, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS } from "./src/defaults";
 import { DEFAULT_DIAGRAM_LAYOUT, DiagramLayout, MermaidGlobal, applyDiagramLayout } from "./src/diagram-layout";
+import { extractMermaidFence, wrapLongMermaidLabels } from "./src/mermaid-labels";
 import { ImageLightbox, installZoomAffordance, type LightboxTarget } from "./src/lightbox";
 import { installMobileReadingTaps } from "./src/mobile-reading-taps";
 import {
@@ -113,6 +114,7 @@ export default class ZoomableReaderPlugin extends Plugin {
     this.addSettingTab(new ZoomableReaderSettingTab(this.app, this));
     this.registerLightbox();
     this.registerDiagramLayout();
+    this.registerDiagramWrapping();
     this.syncReadingView();
   }
 
@@ -273,6 +275,57 @@ export default class ZoomableReaderPlugin extends Plugin {
   }
 
   /** 立即尝试装一次；返回 true 表示已经是我们想要的状态（含「功能被关掉」）。 */
+  /**
+   * 阅读视图里的长标签折行（用户要求：「应该可以换行，而不是一行顶一个宽度」）。
+   *
+   * 为什么要在宿主渲染完之后再动手：Mermaid 只对 **markdown 字符串** 标签按 wrappingWidth
+   * 折行，普通 A[长文本] 从不折行（10.9 实测：把上限从 460 改到 120，渲染结果一模一样）。
+   * 图表是宿主渲染的、源码不在我们手里，但 registerMarkdownPostProcessor 会在每个块渲染完后
+   * 把我们叫来，并给出该块的行范围（context.getSectionInfo）—— 于是：
+   *   抠出围栏里的 mermaid 源码 → 把长标签改写成 markdown 字符串 → 自己重渲染一次 → 换上去。
+   *
+   * 失败一律【不换】：这块代码最坏的结局必须是「没折行」，而不是「图没了」。
+   */
+  private registerDiagramWrapping(): void {
+    this.registerMarkdownPostProcessor((element, context) => {
+      if (!this.settings.diagramLayout) return;
+      /* 自己视图（白板/版面）里的图表由渲染前的改写负责，这里不重复劳动 */
+      if (element.closest(".zr-page")) return;
+      const host = element.matches(".block-language-mermaid, .mermaid")
+        ? element
+        : element.querySelector(".block-language-mermaid, .mermaid");
+      if (!host) return;
+      const info = context.getSectionInfo(element);
+      if (!info) return;
+      const source = extractMermaidFence(info.text, info.lineStart, info.lineEnd);
+      if (!source) return;
+      const wrapped = wrapLongMermaidLabels(source, { maxWidth: this.settings.diagramWrapWidth });
+      if (wrapped === source) return;
+      void this.rerenderMermaid(host, wrapped);
+    });
+  }
+
+  /** 用改写后的源码重画一张图；任何一步失败都保持宿主原本那张（不换）。 */
+  private async rerenderMermaid(host: Element, source: string): Promise<void> {
+    const mermaid = (window as unknown as {
+      mermaid?: { render?: (id: string, text: string) => Promise<{ svg: string }> };
+    }).mermaid;
+    if (!mermaid || typeof mermaid.render !== "function") return;
+    try {
+      const id = "zr-mermaid-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const { svg } = await mermaid.render(id, source);
+      if (!svg || !host.isConnected) return;
+      /* 不用 innerHTML（会触发 no-unsanitized 规则，也确实没必要）：
+       * 把 svg 字符串解析成节点再换进去。解析失败（parsererror）就不换。 */
+      const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+      const svgEl = parsed.documentElement;
+      if (!svgEl || svgEl.nodeName.toLowerCase() !== "svg") return;
+      host.replaceChildren(document.importNode(svgEl, true));
+    } catch (error) {
+      console.error("[zoomable-reader] mermaid re-render failed", error);
+    }
+  }
+
   applyDiagramLayoutNow(): boolean {
     const layout: DiagramLayout = {
       ...DEFAULT_DIAGRAM_LAYOUT,

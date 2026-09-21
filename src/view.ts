@@ -1,6 +1,7 @@
 import { Component, ItemView, MarkdownView, MarkdownRenderer, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type ZoomableReaderPlugin from "../main";
 import type { ReaderMode } from "./settings-spec";
+import { wrapMermaidFences } from "./mermaid-labels";
 import { BOARD_MIN_SCALE, ZOOM_STEP, ZoomPanLayer, formatPercent, type Transform } from "./zoom-pan";
 
 export const VIEW_TYPE_ZOOMABLE_READER = "zoomable-reader-view";
@@ -298,7 +299,13 @@ export class ZoomableReaderView extends ItemView {
     page.empty();
     try {
       const markdown = await this.readSource(file);
-      await MarkdownRenderer.render(this.app, markdown, page, file.path, component);
+      /* 渲染前先过长标签：Mermaid 只对 markdown 字符串标签折行，普通 A[长文本] 从不折行
+       * （10.9 实测），所以这里把长标签改写成 markdown 字符串，折行交给 Mermaid 自己。
+       * 只动 mermaid 围栏里的内容，且只在图表排版增强打开时动手。 */
+      const prepared = this.plugin.settings.diagramLayout
+        ? wrapMermaidFences(markdown, { maxWidth: this.plugin.settings.diagramWrapWidth })
+        : markdown;
+      await MarkdownRenderer.render(this.app, prepared, page, file.path, component);
     } catch (error) {
       /* 手机上打不开控制台，所以失败必须【看得见】：给一条通知，别静默留一块空白。 */
       reportRenderFailure(error);

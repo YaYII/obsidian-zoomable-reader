@@ -100,14 +100,13 @@
   overflow-x: auto;
 }
 
-/* 图表也按版面宽度等比显示：主题常把 useMaxWidth 设为 false（框随文字走的前提），
- * svg 会按自然宽度渲染，于是在窄版心里要么溢出、要么比正文窄一截。
- * 矢量的东西等比缩放即可，放大看细节交给查看器。 */
+/* 图表只保证【不溢出】，不再拉伸到版面宽度。
+ * 拉伸会把 svg 连字带线一起放大（478px 的图铺进 1280px 是 2.7 倍，16px 的字渲染成 43px），
+ * 用户的要求是「字号固定，不超过 16px」。窄图保持原尺寸，宽图按比例缩进版面。 */
 .zr-page .mermaid svg,
 .zr-page .block-language-mermaid svg,
 .zr-page .excalidraw-svg svg,
 .zr-page .block-language-chart svg {
-  width: 100% !important;
   max-width: 100% !important;
   height: auto !important;
 }

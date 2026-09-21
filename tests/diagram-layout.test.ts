@@ -18,7 +18,7 @@ describe("mergeDiagramConfig", () => {
   it("放宽标签宽度并给框更多留白", () => {
     const merged = mergeDiagramConfig(hostConfig(), DEFAULT_DIAGRAM_LAYOUT);
     const flow = merged.flowchart as Record<string, unknown>;
-    expect(flow.wrappingWidth).toBe(460);
+    expect(flow.wrappingWidth).toBe(260);
     expect(flow.padding).toBe(18);
     expect((merged.sequence as Record<string, unknown>).actorMargin).toBe(60);
   });
@@ -51,16 +51,24 @@ describe("mergeDiagramConfig", () => {
 
   it("宿主没给某一段时自己建出来（不是每个版本都带着这些键）", () => {
     const merged = mergeDiagramConfig({}, DEFAULT_DIAGRAM_LAYOUT);
-    expect((merged.flowchart as Record<string, unknown>).wrappingWidth).toBe(460);
+    expect((merged.flowchart as Record<string, unknown>).wrappingWidth).toBe(260);
     expect((merged.sequence as Record<string, unknown>).width).toBe(160);
-    expect((merged.state as Record<string, unknown>).wrappingWidth).toBe(460);
+    expect((merged.state as Record<string, unknown>).wrappingWidth).toBe(260);
   });
 
   it("state / class / er 与 flowchart 用同一个宽度上限", () => {
     const merged = mergeDiagramConfig(hostConfig(), DEFAULT_DIAGRAM_LAYOUT);
     for (const key of ["state", "class", "er"]) {
-      expect((merged[key] as Record<string, unknown>).wrappingWidth).toBe(460);
+      expect((merged[key] as Record<string, unknown>).wrappingWidth).toBe(260);
     }
+  });
+
+  it("打开 markdownAutoWrap —— 不打开的话 wrappingWidth 对标签完全不起作用", () => {
+    const merged = mergeDiagramConfig(hostConfig(), DEFAULT_DIAGRAM_LAYOUT);
+    expect((merged.flowchart as Record<string, unknown>).markdownAutoWrap).toBe(true);
+    /* 关闭时不许偷偷打开 */
+    const off = mergeDiagramConfig(hostConfig(), DEFAULT_DIAGRAM_LAYOUT, false);
+    expect((off.flowchart as Record<string, unknown>).markdownAutoWrap).toBeUndefined();
   });
 });
 
@@ -94,7 +102,7 @@ describe("applyDiagramLayout", () => {
     expect(applyDiagramLayout(win, DEFAULT_DIAGRAM_LAYOUT)).toBe(true);
     expect(calls).toHaveLength(1);
     const flow = calls[0].flowchart as Record<string, unknown>;
-    expect(flow.wrappingWidth).toBe(460);
+    expect(flow.wrappingWidth).toBe(260);
     expect(flow.useMaxWidth).toBe(false);
   });
 

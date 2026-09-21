@@ -38,6 +38,9 @@ columns, just a wide sheet of paper you read downwards.
   懒加载插件换成 1px 占位图（真图在 `data-src`）。查看器会自己取分辨率最高的那张。
 - **点一下图片 = 原图 100%**（读数会写明「原图 / native」），再点一下收回适配；**右上角有一个关闭按钮**
   （手机 44px），不用去工具条里找那个小叉。
+- **图里的字号固定、长标签自动折行**：Mermaid 图里的文字固定 ≤16px（不再被拉伸放大，也不随正文字号浮动）；
+  超过折行宽度（默认 260px ≈ 16 个汉字）的标签会自动折成两三行，不再「一行顶一个宽度」。
+  折行宽度可在设置里调：图表排版增强 → 标签折行宽度。
 
 ## Why this exists
 
@@ -84,6 +87,11 @@ Notes:
   touch devices (`@media (hover: none) { display: none }`) in favour of "just tap the image" — which
   meant tapping near an image edge often missed. It is now 34 px visually with a ~46 px tap area, and
   tapping it opens the viewer for that image or diagram (tapping the image still works).
+- **Diagram text stays at a fixed size and long labels wrap.** Mermaid text is capped at 16 px and is
+  never scaled up (the plugin no longer stretches diagram SVGs to the line width — that is what used to
+  turn 16 px labels into 30–43 px on a wide page). Labels longer than the wrap width (260 px by default,
+  about 16 Chinese characters) are rewritten into Mermaid *markdown strings* so the layout engine itself
+  wraps them into two or three lines instead of one line spanning the whole width.
 - **The viewer opens the original file, not the thumbnail the note happens to show.** If the
   `<img>` carries a `srcset`, the viewer takes the highest-resolution candidate; if `src` is a 1 px
   lazy-load placeholder, it follows `data-src`. Tapping the image jumps to 100 % (the readout says

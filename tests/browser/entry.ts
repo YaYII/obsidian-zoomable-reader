@@ -4,6 +4,7 @@ import { ZoomPanLayer, formatPercent, fitRect, BOARD_MIN_SCALE } from "../../src
 import { ImageLightbox, installZoomAffordance } from "../../src/lightbox";
 import { installMobileReadingTaps } from "../../src/mobile-reading-taps";
 import { DEFAULT_DIAGRAM_LAYOUT, applyDiagramLayout, mergeDiagramConfig } from "../../src/diagram-layout";
+import { estimateLabelWidth, extractMermaidFence, wrapLongMermaidLabels, wrapMermaidFences } from "../../src/mermaid-labels";
 import { DEFAULT_SETTINGS, PAPER_WIDTHS_PX, WEB_WIDTH_PX, paperNameFor, readingLineWidth, widthLabel, widthToMm } from "../../src/settings-spec";
 import {
   READING_ZOOM_MAX,
@@ -26,6 +27,12 @@ declare global {
       apply: typeof applyDiagramLayout;
       merge: typeof mergeDiagramConfig;
       defaults: typeof DEFAULT_DIAGRAM_LAYOUT;
+    };
+    MermaidLabels: {
+      wrap: typeof wrapLongMermaidLabels;
+      wrapFences: typeof wrapMermaidFences;
+      extract: typeof extractMermaidFence;
+      width: typeof estimateLabelWidth;
     };
     ZoomableReaderDefaults: typeof DEFAULT_SETTINGS;
     ReadingView: {
@@ -54,6 +61,12 @@ window.ImageLightbox = ImageLightbox;
 window.installZoomAffordance = installZoomAffordance;
 window.installMobileReadingTaps = installMobileReadingTaps;
 window.DiagramLayout = { apply: applyDiagramLayout, merge: mergeDiagramConfig, defaults: DEFAULT_DIAGRAM_LAYOUT };
+window.MermaidLabels = {
+  wrap: wrapLongMermaidLabels,
+  wrapFences: wrapMermaidFences,
+  extract: extractMermaidFence,
+  width: estimateLabelWidth,
+};
 window.ZoomableReaderDefaults = DEFAULT_SETTINGS;
 window.ReadingView = {
   css: readingCss,

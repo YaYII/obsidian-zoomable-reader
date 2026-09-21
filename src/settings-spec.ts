@@ -157,7 +157,9 @@ export const DEFAULT_SETTINGS: ZoomableReaderSettings = {
   /* 图表排版增强（默认开）：把 Mermaid 的「一个标签最多铺多宽」从 200px 放宽到 460px，
    * 框随文字走 —— 学 PlantUML 的做法，中文长标签不再被折成四五行的窄条。 */
   diagramLayout: true,
-  diagramWrapWidth: 460,
+  /* 默认 260（约一行 16 个汉字）：460 时中文长标签是【一整行】把框顶得很宽，用户的原话是
+   * 「一行顶一个宽度」；260 让长标签自然折成两三行，框变窄、图变紧凑。 */
+  diagramWrapWidth: 260,
   rememberPosition: true,
 };
 
@@ -539,20 +541,21 @@ export const SETTINGS_GROUPS: SettingsGroupSpec[] = [
         key: "diagramLayout",
         zh: "图表框随文字走",
         en: "Wider diagram boxes",
-        zhDesc: "Mermaid 默认把标签限制在 200px，中文长标签会被折成四五行窄条。打开后放宽上限、给框更多留白（学 PlantUML 的做法）。已经打开的图表会在下次渲染时生效。",
-        enDesc: "Mermaid caps a label at 200px, folding long Chinese labels into four or five narrow lines. This widens the cap and adds padding so boxes follow the text. Open diagrams pick it up on their next render.",
+        zhDesc: "把过长的标签自动折成多行（图标越窄越好读），而不是一行顶满整条宽度；同时给框更多留白。Mermaid 只对 markdown 字符串折行，所以插件会把长标签改写成那种写法。已经打开的图表会在下次渲染时生效。",
+        enDesc: "Wraps over-long labels onto several lines instead of letting one line span the full width, and adds padding around the text. Mermaid only wraps markdown-string labels, so the plugin rewrites long labels into that form. Open diagrams pick it up on their next render.",
         aliases: ["mermaid", "图表", "排版", "框图", "diagram", "layout", "width", "plantuml"],
       },
       {
         control: "slider",
         id: "diagram-wrap-width",
         key: "diagramWrapWidth",
+        /* 240 起步：再窄就只剩三四个字一行，中文会碎成一条竖着的字串 */
         min: 240,
         max: 800,
         step: 20,
         format: (v) => v + " px",
-        zh: "标签最大宽度",
-        en: "Max label width",
+        zh: "标签折行宽度",
+        en: "Label wrap width",
         zhDesc: "一个标签最多铺多宽才折行。460 是实测的中文舒适值，800 基本不折行。",
         enDesc: "How wide one label may get before it wraps. 460 is a comfortable value for Chinese; 800 is close to no wrapping at all.",
         aliases: ["标签", "宽度", "折行", "label", "width", "wrap"],

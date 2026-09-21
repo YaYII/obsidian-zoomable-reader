@@ -48,13 +48,17 @@ describe("readingCss：注入的样式", () => {
     expect(css).not.toContain("zoom:");
   });
 
-  it("手势关掉：不声明 touch-action（一个字节都不注入）", () => {
-    expect(readingCss({ lineWidth: "theme", zoom: 1, gestures: false, imageWidth: "natural" })).toBe("");
+  it("手势关掉：不声明 touch-action（图表那条限宽规则仍然在，它不属于手势）", () => {
+    const css = readingCss({ lineWidth: "theme", zoom: 1, gestures: false, imageWidth: "natural" });
+    expect(css).not.toContain("touch-action");
+    expect(css).not.toContain("zoom:");
+    expect(css).not.toContain("--file-line-width");
   });
 
   it("选择器限定在阅读视图内（本插件自己的视图不受影响）", () => {
     const css = readingCss({ lineWidth: 900, zoom: 1.2, gestures: true, imageWidth: "natural" });
-    for (const line of css.split("\n")) {
+    /* 只挑「选择器行」检查：规则体里的属性行不以 . 开头，不该拿来判断作用域 */
+    for (const line of css.split("\n").filter((l) => l.trim().startsWith("."))) {
       if (line.trim() === "" || line.trim() === "}") continue;
       if (line.includes("{") || line.includes("px;") || line.includes("!important")) {
         expect(line.includes(".markdown-reading-view") || line.includes("--file-line-width") || line.includes("--line-width") || line.trim() === "}", line).toBe(true);
@@ -89,10 +93,27 @@ describe("图片宽度策略：严格按版心宽度等比放大", () => {
     expect(css).toContain("object-fit: contain;");
   });
 
-  it("fill 用精确的 width:100%（不是 max-width 那种子串）—— 图片与图表各一条", () => {
+  /* 图表的规则块：从选择器行到第一个 "}" —— 属性断言必须限定在块内，
+   * 否则「图表有没有 width:100%」会被后面图片块的那一行污染（子串断言的经典坑）。 */
+  const diagramRule = (css: string): string => {
+    const start = css.indexOf(".markdown-reading-view .mermaid svg");
+    if (start < 0) return "";
+    const end = css.indexOf("}", start);
+    return css.slice(start, end < 0 ? undefined : end);
+  };
+
+  /* ⚠ 子串陷阱：「max-width: 100% !important;」里就含有「width: 100%」——
+   * 判断「有没有被拉伸」必须比【整行】，不能 contains（这个项目已经被同类子串坑过一次）。 */
+  const hasStretch = (block: string): boolean =>
+    block.split("\n").some((line) => line.trim() === "width: 100% !important;");
+
+  it("fill：只有图片/视频写 width:100%；图表只限宽 —— 拉伸会把字号放大到超过 16px", () => {
     const css = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "fill" });
     const exact = css.split("\n").filter((line) => line.trim() === "width: 100% !important;");
-    expect(exact).toHaveLength(2); /* 一条给图片/视频，一条给图表 */
+    expect(exact).toHaveLength(1); /* 只剩图片/视频那一条 */
+    const diagram = diagramRule(css);
+    expect(diagram).toContain("max-width: 100% !important;");
+    expect(hasStretch(diagram)).toBe(false);
   });
 
   it("contain：只保证不溢出（max-width），不放大", () => {
@@ -102,9 +123,12 @@ describe("图片宽度策略：严格按版心宽度等比放大", () => {
     expect(lines).not.toContain("width: 100% !important;");
   });
 
-  it("natural：一个字节都不注入（完全交给主题）", () => {
+  it("natural：图片规则不注入（交给主题）；图表仍只限宽 —— 无论选哪种策略，图都不会被拉伸", () => {
     const css = readingCss({ lineWidth: "theme", zoom: 1, gestures: false, imageWidth: "natural" });
-    expect(css).toBe("");
+    expect(css).not.toContain("img");
+    const diagram = diagramRule(css);
+    expect(diagram).toContain("max-width: 100% !important;");
+    expect(hasStretch(diagram)).toBe(false);
   });
 
   it("fill 也管流程图：Mermaid / Excalidraw / charts 的 svg 都按版心宽度等比显示", () => {
@@ -118,13 +142,16 @@ describe("图片宽度策略：严格按版心宽度等比放大", () => {
     expect(css).toContain("height: auto !important;");
   });
 
-  it("contain 对图表只限宽不放大；natural 一个字节都不注入", () => {
-    const contain = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "contain" });
-    expect(contain).toContain(".mermaid svg");
-    const exactFill = contain.split("\n").filter((line) => line.trim() === "width: 100% !important;");
-    expect(exactFill).toHaveLength(0);
-    const natural = readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth: "natural" });
-    expect(natural).not.toContain("mermaid");
+  it("三种图片策略下图表的规则完全一致：只限宽、不放大", () => {
+    const rules = (["fill", "contain", "natural"] as const).map((imageWidth) =>
+      diagramRule(readingCss({ lineWidth: 900, zoom: 1, gestures: false, imageWidth }))
+    );
+    for (const rule of rules) {
+      expect(rule).toContain(".mermaid svg");
+      expect(rule).toContain("max-width: 100% !important;");
+      expect(hasStretch(rule)).toBe(false);
+    }
+    expect(new Set(rules).size).toBe(1);
   });
 
   it("图表规则同样只在阅读视图内（不影响编辑模式与其它插件）", () => {

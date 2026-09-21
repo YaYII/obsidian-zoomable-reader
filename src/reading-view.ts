@@ -80,15 +80,12 @@ export function readingCss(options: ReadingViewOptions): string {
     READING_VIEW_SELECTOR + " .block-language-chart canvas",
   ].join(",\n");
 
-  /* 图表（Mermaid 流程图等）：默认也【撑满版心】。
-   * 为什么必须显式写：主题常把 flowchart.useMaxWidth 设成 false（框随文字走的前提），
-   * 于是 svg 会按自己的自然宽度渲染 —— 在手机上就是「超出屏幕」或者「比正文窄一截」。
-   * 按版心宽度等比缩放（SVG 是矢量的，字跟着一起缩放，放大看细节交给查看器）。 */
-  if (options.imageWidth === "fill") {
-    rules.push(diagramTargets + " {\n  width: 100% !important;\n  max-width: 100% !important;\n  height: auto !important;\n}");
-  } else if (options.imageWidth === "contain") {
-    rules.push(diagramTargets + " {\n  max-width: 100% !important;\n  height: auto !important;\n}");
-  }
+  /* 图表（Mermaid 流程图等）：只保证【不溢出】，不再拉伸到版心宽度。
+   * 拉伸的代价是把 svg 连字带线一起放大：一张 478px 的图铺进 900px 版心是 1.9 倍，
+   * 图里 16px 的字就渲染成 30px —— 用户的原话是「文字大小应该固定，不能超过 16px」。
+   * 窄图现在保持原尺寸（框随文字走），宽图按比例缩进版心（max-width）。
+   * 图片（img/video）不受影响：那条规则在下面，仍然撑满版心。 */
+  rules.push(diagramTargets + " {\n  max-width: 100% !important;\n  height: auto !important;\n}");
 
   /* 图片：默认【撑满版心】——按版心宽度等比放大，高度自动，绝不拉伸变形。
    * 显式写了宽度的图片（![[x.png|300]]）也被统一到版心宽度：用户要的是
