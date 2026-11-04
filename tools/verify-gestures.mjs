@@ -527,6 +527,10 @@ try {
   mLb.on("pageerror", (e) => mLbErrors.push(String((e && e.message) || e)));
   await mLb.goto(pathToFileURL(path.join(ROOT, "tests", "browser", "lightbox.html")).href, { waitUntil: "load" });
   await mLb.waitForFunction(() => window.lightboxHarness && document.getElementById("photo").naturalWidth > 0);
+  await mLb.evaluate(() => {
+    document.body.classList.add("is-mobile", "is-phone");
+    document.body.style.setProperty("--safe-area-inset-top", "54px");
+  });
   const mLbClient = await mLbCtx.newCDPSession(mLb);
   const mTouch = (type, points) =>
     mLbClient.send("Input.dispatchTouchEvent", {
@@ -542,6 +546,33 @@ try {
   await mLb.waitForTimeout(150);
   const mOpened = await mLb.evaluate(() => ({ open: window.lightboxHarness.isOpen(), label: window.lightboxHarness.label() }));
   assert(mOpened.open, "手机：触摸图片 → 打开查看器", "label=" + mOpened.label);
+
+  const toolbarLayout = () => mLb.evaluate(() => {
+    const bar = document.querySelector(".zr-lightbox-toolbar");
+    const size = document.querySelector(".zr-lightbox-size");
+    const controls = Array.from(bar.querySelectorAll("button"));
+    const controlRects = controls.map((el) => el.getBoundingClientRect());
+    const barRect = bar.getBoundingClientRect();
+    const sizeRect = size.getBoundingClientRect();
+    return {
+      barTop: barRect.top,
+      barWidth: barRect.width,
+      barScrollWidth: bar.scrollWidth,
+      sizeTop: sizeRect.top,
+      controlsBottom: Math.max(...controlRects.map((rect) => rect.bottom)),
+      controlsInside: controlRects.every((rect) => rect.left >= barRect.left && rect.right <= barRect.right),
+      sizeInside: sizeRect.left >= barRect.left && sizeRect.right <= barRect.right,
+    };
+  });
+  for (const width of [390, 320]) {
+    if (width !== 390) await mLb.setViewportSize({ width, height: 780 });
+    const layout = await toolbarLayout();
+    assert(layout.barTop >= 54 && layout.sizeTop >= layout.controlsBottom &&
+      layout.controlsInside && layout.sizeInside && layout.barScrollWidth <= layout.barWidth + 1,
+    "手机 " + width + "px：工具条避开状态栏，尺寸读数独占下一行且没有横向溢出",
+    "top=" + layout.barTop + " sizeTop=" + Math.round(layout.sizeTop) + " controlsBottom=" + Math.round(layout.controlsBottom));
+  }
+  await mLb.setViewportSize({ width: 390, height: 780 });
 
   const mBefore = await mLb.evaluate(() => window.lightboxHarness.transform());
   await mTouch("touchStart", [{ x: 120, y: 400, id: 1 }, { x: 220, y: 400, id: 2 }]);
